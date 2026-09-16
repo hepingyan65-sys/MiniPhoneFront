@@ -6,18 +6,12 @@
 <title>小手机</title>
 <style>
   :root{
-    --sky-top: #0B0C14;
-    --sky-bottom: #171A2B;
-    --frame: #16161C;
-    --frame-edge: #060608;
-    --screen-top: #14162244;
-    --lamp: #E3A15C;
-    --lamp-dim: #B97A4A;
-    --moon: #8892AC;
-    --ink: #EDE7DA;
-    --ink-dim: #9A9CB4;
-    --bubble-ai: #23273A;
-    --bubble-me: #3A2E28;
+    --sky-top: #0B0C14; --sky-bottom: #171A2B;
+    --frame: #16161C; --frame-edge: #060608;
+    --lamp: #E3A15C; --lamp-dim: #B97A4A; --moon: #8892AC;
+    --ink: #EDE7DA; --ink-dim: #9A9CB4;
+    --bubble-ai: #23273A; --bubble-me: #3A2E28;
+    --card: #1A1D2C; --card-line: rgba(255,255,255,.08);
   }
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
@@ -26,161 +20,192 @@
     background: radial-gradient(ellipse 900px 600px at 50% -10%, #23283f 0%, #0A0A10 55%, #050507 100%);
     display:flex; align-items:center; justify-content:center;
     font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
-    padding: 16px;
-    overflow: hidden;
+    padding: 16px; overflow:hidden;
   }
-  .stage{ display:flex; flex-direction:column; align-items:center; gap:14px; }
   .phone{
-    width: min(400px, 94vw);
-    height: min(720px, 92dvh);
+    width: min(400px, 94vw); height: min(720px, 92dvh);
     background: var(--frame); border-radius: 38px; padding: 12px;
     box-shadow: 0 0 0 1px var(--frame-edge), 0 40px 80px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.04);
     display:flex; flex-direction:column; position:relative;
   }
-  @media (max-width: 480px){
-    .phone{ width: 100vw; height: 100dvh; border-radius: 0; padding: 0; }
-    .screen{ border-radius: 0; }
-    .hint{ display:none; }
-  }
+  @media (max-width: 480px){ .phone{ width:100vw; height:100dvh; border-radius:0; padding:0; } .screen{ border-radius:0; } }
   .screen{
-    flex:1; border-radius: 26px; overflow:hidden; display:flex; flex-direction:column; position:relative;
-    background:
-      radial-gradient(420px 260px at 30% 0%, rgba(227,161,92,.14), transparent 60%),
-      linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+    flex:1; border-radius:26px; overflow:hidden; display:flex; flex-direction:column; position:relative;
+    background: radial-gradient(420px 260px at 30% 0%, rgba(227,161,92,.14), transparent 60%), linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
   }
-  .status{ height:26px; display:flex; align-items:center; justify-content:space-between; padding: 6px 20px 0; font-size:11px; color: var(--ink-dim); }
-  .header{
-    display:flex; align-items:center; gap:12px; padding: 8px 16px 14px;
-    border-bottom: 1px solid rgba(255,255,255,.06); position:relative;
-  }
+  .status{ height:26px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding: 6px 20px 0; font-size:11px; color: var(--ink-dim); }
+
+  /* ---- 顶部各tab的header ---- */
+  .header{ display:flex; align-items:center; gap:12px; padding: 8px 16px 14px; border-bottom: 1px solid var(--card-line); flex-shrink:0; }
   .avatar{
     width:40px; height:40px; border-radius:50%; flex-shrink:0;
     background: radial-gradient(circle at 35% 30%, #F3C286, var(--lamp) 55%, var(--lamp-dim) 100%);
     box-shadow: 0 0 18px 3px rgba(227,161,92,.45);
-    display:flex; align-items:center; justify-content:center;
-    color:#20140A; font-family:"Noto Serif SC", serif; font-size:16px;
+    display:flex; align-items:center; justify-content:center; color:#20140A; font-family:"Noto Serif SC", serif; font-size:16px;
   }
   .who{flex:1; min-width:0;}
-  .who .name{ font-family:"Noto Serif SC", serif; font-size:16px; color: var(--ink); letter-spacing:.02em; }
+  .who .name{ font-family:"Noto Serif SC", serif; font-size:16px; color: var(--ink); }
   .who .status-line{font-size:11px; color: var(--moon); margin-top:2px;}
-  .gear{
-    width:28px; height:28px; border-radius:50%; border:1px solid rgba(255,255,255,.12);
-    background: rgba(255,255,255,.03); color: var(--ink-dim); cursor:pointer; font-size:13px;
-  }
+  .plain-title{ font-family:"Noto Serif SC", serif; font-size:17px; color: var(--ink); flex:1; }
+
+  /* ---- 三个面板容器 ---- */
+  .panels{ flex:1; min-height:0; position:relative; }
+  .panel{ position:absolute; inset:0; display:none; flex-direction:column; min-height:0; }
+  .panel.active{ display:flex; }
+
+  /* ---- 信息 tab ---- */
   .chat{ flex:1; overflow-y:auto; padding: 16px 14px 8px; display:flex; flex-direction:column; gap:11px; }
   .row{ display:flex; } .row.me{ justify-content:flex-end; }
-  .bubble{
-    max-width: 76%; padding: 10px 14px; border-radius: 15px; font-size: 13.5px; line-height:1.6;
-    white-space:pre-wrap; word-break:break-word;
-  }
-  .row.ai .bubble{
-    background: var(--bubble-ai); color: var(--ink);
-    border: 1px solid rgba(227,161,92,.18);
-    border-top-left-radius:4px;
-    box-shadow: 0 0 14px rgba(227,161,92,.06);
-  }
-  .row.me .bubble{
-    background: var(--bubble-me); color: var(--ink);
-    border-top-right-radius:4px;
-  }
+  .bubble{ max-width: 76%; padding: 10px 14px; border-radius: 15px; font-size: 13.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .row.ai .bubble{ background: var(--bubble-ai); color: var(--ink); border: 1px solid rgba(227,161,92,.18); border-top-left-radius:4px; box-shadow: 0 0 14px rgba(227,161,92,.06); }
+  .row.me .bubble{ background: var(--bubble-me); color: var(--ink); border-top-right-radius:4px; }
   .bubble.typing{ color: var(--ink-dim); font-style: italic; }
-  .inputbar{
-    display:flex; align-items:flex-end; gap:8px; padding: 10px 12px 14px;
-    border-top: 1px solid rgba(255,255,255,.06);
-    background: linear-gradient(180deg, transparent, rgba(5,5,8,.4));
-  }
-  textarea{
-    flex:1; resize:none; border-radius:16px; border:1px solid rgba(255,255,255,.12);
-    padding: 9px 12px; font-size:16px; font-family:inherit; color: var(--ink);
-    background: rgba(255,255,255,.04); max-height:80px; min-height:36px; outline:none;
-  }
+  .inputbar{ display:flex; align-items:flex-end; gap:8px; padding: 10px 12px 14px; border-top: 1px solid var(--card-line); background: linear-gradient(180deg, transparent, rgba(5,5,8,.4)); flex-shrink:0; }
+  textarea{ flex:1; resize:none; border-radius:16px; border:1px solid rgba(255,255,255,.12); padding: 9px 12px; font-size:16px; font-family:inherit; color: var(--ink); background: rgba(255,255,255,.04); max-height:80px; min-height:36px; outline:none; }
   textarea::placeholder{ color: var(--ink-dim); }
   textarea:focus{ border-color: var(--lamp); }
-  .send{
-    background: linear-gradient(135deg, #F0BA80, var(--lamp-dim));
-    color:#20140A; border:none; border-radius:16px; padding: 9px 16px; font-size:13px;
-    font-weight:600; cursor:pointer; flex-shrink:0;
-  }
+  .send{ background: linear-gradient(135deg, #F0BA80, var(--lamp-dim)); color:#20140A; border:none; border-radius:16px; padding: 9px 16px; font-size:13px; font-weight:600; cursor:pointer; flex-shrink:0; }
   .send:disabled{ opacity:.4; }
-  .hint{ color: var(--ink-dim); font-size:12px; }
-  .modal-mask{
-    position:absolute; inset:0; background: rgba(5,5,10,.72);
-    display:flex; align-items:center; justify-content:center;
-    opacity:0; pointer-events:none; transition: opacity .15s;
+
+  /* ---- 动态 tab ---- */
+  .moments-body{ flex:1; overflow-y:auto; padding: 14px 14px 90px; }
+  .moment-compose{
+    background: var(--card); border:1px solid var(--card-line); border-radius:14px; padding:10px; margin-bottom:16px;
   }
-  .modal-mask.open{ opacity:1; pointer-events:auto; }
-  .modal{ width: 86%; background: #1A1D2C; border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:8px; }
-  .modal h3{ margin:0 0 4px; font-family:"Noto Serif SC", serif; font-size:15px; color: var(--ink); }
-  .modal label{ font-size:11.5px; color: var(--ink-dim); }
-  .modal input, .modal textarea{
-    width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.14);
-    padding:7px 10px; font-size:16px; font-family:inherit; color: var(--ink); background: rgba(255,255,255,.04);
+  .moment-compose textarea{ width:100%; min-height:64px; background:transparent; border:none; color:var(--ink); font-size:14px; resize:vertical; outline:none; padding:2px; }
+  .moment-compose-actions{ display:flex; justify-content:flex-end; margin-top:4px; }
+  .moment-post-btn{ background: var(--lamp); color:#20140A; border:none; border-radius:10px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .moment-post-btn:disabled{ opacity:.4; }
+  .moment-card{ margin-bottom:20px; }
+  .moment-date{ font-size:11px; color: var(--ink-dim); margin-bottom:6px; }
+  .moment-text{ font-size:13.5px; line-height:1.7; color: var(--ink); white-space:pre-wrap; margin-bottom:10px; }
+  .moment-comment{
+    background: var(--bubble-ai); border:1px solid rgba(227,161,92,.18); border-radius:12px;
+    padding:10px 12px; font-size:13px; line-height:1.6; color: var(--ink); position:relative;
   }
-  .modal textarea{ min-height:70px; resize:vertical; }
-  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
-  .modal-actions button{ border:none; border-radius:10px; padding:7px 14px; font-size:12.5px; cursor:pointer; }
-  .btn-cancel{ background:transparent; color: var(--ink-dim); border:1px solid rgba(255,255,255,.14) !important; }
-  .btn-save{ background: var(--lamp); color:#20140A; font-weight:600; }
+  .moment-comment::before{ content:"💬 " attr(data-name); display:block; font-size:11px; color: var(--lamp); margin-bottom:4px; font-family:"Noto Serif SC", serif; }
+  .moment-comment.pending{ color: var(--ink-dim); font-style:italic; }
+  .moments-empty{ color: var(--ink-dim); font-size:13px; text-align:center; margin-top:40px; }
+
+  /* ---- 设置 tab ---- */
+  .settings-body{ flex:1; overflow-y:auto; padding: 14px 14px 90px; display:flex; flex-direction:column; gap:16px; }
+  .settings-section{ background: var(--card); border:1px solid var(--card-line); border-radius:14px; padding:12px; }
+  .settings-section h4{ margin:0 0 8px; font-size:12px; color: var(--ink-dim); font-weight:500; letter-spacing:.03em; }
+  .settings-section label{ font-size:11.5px; color: var(--ink-dim); display:block; margin-top:8px; }
+  .settings-section input, .settings-section textarea{
+    width:100%; border-radius:10px; border:1px solid rgba(255,255,255,.14); padding:7px 10px; font-size:16px;
+    font-family:inherit; color: var(--ink); background: rgba(255,255,255,.04); margin-top:4px;
+  }
+  .settings-section textarea{ min-height:64px; resize:vertical; }
+  .settings-save{ background: var(--lamp); color:#20140A; font-weight:600; border:none; border-radius:10px; padding:8px 16px; font-size:12.5px; cursor:pointer; margin-top:10px; }
+  .memory-item{ display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--card-line); font-size:13px; color: var(--ink); }
+  .memory-item:last-child{ border-bottom:none; }
+  .memory-item span{ flex:1; }
+  .memory-del{ background:transparent; border:1px solid rgba(255,255,255,.14); color: var(--ink-dim); border-radius:8px; width:22px; height:22px; font-size:12px; cursor:pointer; flex-shrink:0; }
+  .memory-empty{ color: var(--ink-dim); font-size:12.5px; }
+
+  /* ---- 底部 tab bar ---- */
+  .tabbar{
+    display:flex; border-top:1px solid var(--card-line); background: rgba(10,10,16,.85); backdrop-filter: blur(8px);
+    flex-shrink:0; padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .tab-btn{
+    flex:1; background:none; border:none; padding:9px 4px 8px; display:flex; flex-direction:column; align-items:center; gap:3px;
+    color: var(--ink-dim); font-size:10.5px; cursor:pointer; font-family:inherit;
+  }
+  .tab-btn .icon{ font-size:18px; line-height:1; }
+  .tab-btn.active{ color: var(--lamp); }
 </style>
 </head>
 <body>
-<div class="stage">
-  <div class="phone">
-    <div class="screen">
-      <div class="status"><span id="clock">23:41</span><span>●●●</span></div>
-      <div class="header">
-        <div class="avatar" id="avatarLetter">阿</div>
-        <div class="who">
-          <div class="name" id="personaName">阿澄</div>
-          <div class="status-line">在线 · 正在等你说话</div>
+<div class="phone">
+  <div class="screen">
+    <div class="status"><span id="clock">23:41</span><span>●●●</span></div>
+
+    <div class="panels">
+      <!-- 动态 -->
+      <div class="panel" id="panel-moments">
+        <div class="header"><div class="plain-title">动态</div></div>
+        <div class="moments-body" id="momentsBody">
+          <div class="moment-compose">
+            <textarea id="momentInput" placeholder="今天过得怎么样，写下来说给 Ta 听……"></textarea>
+            <div class="moment-compose-actions">
+              <button class="moment-post-btn" id="momentPostBtn">发布</button>
+            </div>
+          </div>
+          <div id="momentsList"></div>
         </div>
-        <button class="gear" id="gearBtn" title="设定">⚙</button>
       </div>
-      <div class="chat" id="chat"></div>
-      <div class="inputbar">
-        <textarea id="input" rows="1" placeholder="想说点什么…"></textarea>
-        <button class="send" id="sendBtn">寄出</button>
+
+      <!-- 信息 -->
+      <div class="panel active" id="panel-chat">
+        <div class="header">
+          <div class="avatar" id="avatarLetter">阿</div>
+          <div class="who">
+            <div class="name" id="personaName">阿澄</div>
+            <div class="status-line">在线 · 正在等你说话</div>
+          </div>
+        </div>
+        <div class="chat" id="chat"></div>
+        <div class="inputbar">
+          <textarea id="input" rows="1" placeholder="想说点什么…"></textarea>
+          <button class="send" id="sendBtn">寄出</button>
+        </div>
       </div>
-      <div class="modal-mask" id="modalMask">
-        <div class="modal">
-          <h3>设定</h3>
-          <label>后端地址（部署好之后填这里）</label>
-          <input id="backendInput" placeholder="https://xxx.up.railway.app">
-          <label>名字</label>
-          <input id="nameInput" maxlength="12">
-          <label>人设 / 说话方式</label>
-          <textarea id="personaInput"></textarea>
-          <div class="modal-actions">
-            <button class="btn-cancel" id="cancelBtn">取消</button>
-            <button class="btn-save" id="saveBtn">保存</button>
+
+      <!-- 设置 -->
+      <div class="panel" id="panel-settings">
+        <div class="header"><div class="plain-title">设置</div></div>
+        <div class="settings-body">
+          <div class="settings-section">
+            <h4>连接</h4>
+            <label>后端地址</label>
+            <input id="backendInput" placeholder="https://xxx.up.railway.app">
+            <button class="settings-save" id="saveConnBtn">保存</button>
+          </div>
+          <div class="settings-section">
+            <h4>人设</h4>
+            <label>名字</label>
+            <input id="nameInput" maxlength="12">
+            <label>说话方式（system prompt）</label>
+            <textarea id="personaInput"></textarea>
+            <button class="settings-save" id="savePersonaBtn">保存</button>
+          </div>
+          <div class="settings-section">
+            <h4>Ta 记住的事</h4>
+            <div id="memoryList"></div>
           </div>
         </div>
       </div>
     </div>
+
+    <div class="tabbar">
+      <button class="tab-btn" data-tab="moments"><span class="icon">✦</span>动态</button>
+      <button class="tab-btn active" data-tab="chat"><span class="icon">💬</span>信息</button>
+      <button class="tab-btn" data-tab="settings"><span class="icon">⚙</span>设置</button>
+    </div>
   </div>
-  <div class="hint">点 ⚙ 先填后端地址，再填人设</div>
 </div>
 
 <script>
-const chatEl = document.getElementById('chat');
-const input = document.getElementById('input');
-const sendBtn = document.getElementById('sendBtn');
-const gearBtn = document.getElementById('gearBtn');
-const modalMask = document.getElementById('modalMask');
-const backendInput = document.getElementById('backendInput');
-const nameInput = document.getElementById('nameInput');
-const personaInput = document.getElementById('personaInput');
-const personaNameEl = document.getElementById('personaName');
-const avatarLetterEl = document.getElementById('avatarLetter');
-
+/* ---------- 状态 ---------- */
 const DEFAULT_PERSONA = {
   name: "阿澄",
   system: "你是阿澄，说话人的一个熟悉多年的朋友。性格温和、体贴，但不谄媚，会认真回应对方说的事。回复保持简短口语化，像发消息一样。"
 };
-
 let backendUrl = localStorage.getItem('mp_backend') || '';
 let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { ...DEFAULT_PERSONA };
 let history = JSON.parse(localStorage.getItem('mp_history') || '[]');
+let moments = JSON.parse(localStorage.getItem('mp_moments') || '[]');
+let memories = JSON.parse(localStorage.getItem('mp_memories') || '[]');
+
+const save = {
+  history: () => localStorage.setItem('mp_history', JSON.stringify(history)),
+  moments: () => localStorage.setItem('mp_moments', JSON.stringify(moments)),
+  memories: () => localStorage.setItem('mp_memories', JSON.stringify(memories)),
+  persona: () => localStorage.setItem('mp_persona', JSON.stringify(persona)),
+  backend: () => localStorage.setItem('mp_backend', backendUrl),
+};
 
 function fmtClock(){
   const d = new Date();
@@ -188,95 +213,216 @@ function fmtClock(){
 }
 fmtClock(); setInterval(fmtClock, 30000);
 
+/* ---------- Tab 切换 ---------- */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'settings') renderMemoryList();
+  });
+});
+
+/* ---------- 信息 tab ---------- */
+const chatEl = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const personaNameEl = document.getElementById('personaName');
+const avatarLetterEl = document.getElementById('avatarLetter');
+
 function renderPersona(){
   personaNameEl.textContent = persona.name;
   avatarLetterEl.textContent = persona.name.slice(0,1);
 }
 
-function addBubble(role, text){
+function addBubble(container, role, text){
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'ai');
   const b = document.createElement('div');
   b.className = 'bubble';
   b.textContent = text;
   row.appendChild(b);
-  chatEl.appendChild(row);
-  chatEl.scrollTop = chatEl.scrollHeight;
+  container.appendChild(row);
+  container.scrollTop = container.scrollHeight;
   return b;
 }
 
-function init(){
-  renderPersona();
-  if(history.length === 0){
-    addBubble('assistant', '嗨，是我。今天过得怎么样？');
-  } else {
-    history.forEach(m => addBubble(m.role, m.content));
-  }
-  if(!backendUrl){
-    addBubble('assistant', '（先点右上角 ⚙ 填一下后端地址，才能真正聊起来哦）');
-  }
-}
-
-async function callBackend(userText){
-  const messages = [...history, {role:'user', content:userText}].map(m => ({role:m.role, content:m.content}));
+async function callChat(system, messages, maxTokens){
   const res = await fetch(backendUrl.replace(/\/$/, '') + '/chat', {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system: persona.system, messages })
+    body: JSON.stringify({ system, messages, max_tokens: maxTokens })
   });
   const data = await res.json();
   if(!res.ok) throw new Error(data.error || '请求失败');
   return data.reply;
 }
 
-async function send(){
+async function tryExtractMemory(recentMessages){
+  try{
+    const res = await fetch(backendUrl.replace(/\/$/, '') + '/extract-memory', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ existingMemories: memories, recentMessages })
+    });
+    const data = await res.json();
+    if(data && data.memory && !memories.includes(data.memory)){
+      memories.push(data.memory);
+      save.memories();
+    }
+  }catch(e){ /* 静默失败，不影响聊天 */ }
+}
+
+async function sendChat(){
   const text = input.value.trim();
   if(!text) return;
-  if(!backendUrl){ alert('先在 ⚙ 里填后端地址'); return; }
+  if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
   input.value = '';
   sendBtn.disabled = true;
 
-  addBubble('user', text);
+  addBubble(chatEl, 'user', text);
   history.push({role:'user', content:text});
-  localStorage.setItem('mp_history', JSON.stringify(history));
+  save.history();
 
-  const typingBubble = addBubble('assistant', '正在输入…');
+  const typingBubble = addBubble(chatEl, 'assistant', '正在输入…');
   typingBubble.classList.add('typing');
 
   try{
-    const reply = await callBackend(text);
+    const reply = await callChat(persona.system, history.map(m => ({role:m.role, content:m.content})), 300);
     typingBubble.classList.remove('typing');
     typingBubble.textContent = reply;
     history.push({role:'assistant', content:reply});
-    localStorage.setItem('mp_history', JSON.stringify(history));
+    save.history();
+    tryExtractMemory(history.slice(-6));
   }catch(e){
     typingBubble.classList.remove('typing');
     typingBubble.textContent = '（信号好像断了：' + e.message + '）';
   }
   sendBtn.disabled = false;
-  chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-sendBtn.addEventListener('click', send);
-input.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); } });
+sendBtn.addEventListener('click', sendChat);
+input.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat(); } });
 
-gearBtn.addEventListener('click', () => {
+/* ---------- 动态 tab ---------- */
+const momentInput = document.getElementById('momentInput');
+const momentPostBtn = document.getElementById('momentPostBtn');
+const momentsList = document.getElementById('momentsList');
+
+function renderMoments(){
+  momentsList.innerHTML = '';
+  if(moments.length === 0){
+    momentsList.innerHTML = '<div class="moments-empty">还没有写过日记，写第一篇试试</div>';
+    return;
+  }
+  [...moments].reverse().forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'moment-card';
+    const dateDiv = document.createElement('div');
+    dateDiv.className = 'moment-date';
+    dateDiv.textContent = m.date;
+    const textDiv = document.createElement('div');
+    textDiv.className = 'moment-text';
+    textDiv.textContent = m.text;
+    const commentDiv = document.createElement('div');
+    commentDiv.className = 'moment-comment' + (m.reply ? '' : ' pending');
+    commentDiv.setAttribute('data-name', persona.name);
+    commentDiv.textContent = m.reply || '正在写评论…';
+    card.appendChild(dateDiv); card.appendChild(textDiv); card.appendChild(commentDiv);
+    momentsList.appendChild(card);
+  });
+}
+
+async function postMoment(){
+  const text = momentInput.value.trim();
+  if(!text) return;
+  if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
+  momentInput.value = '';
+  momentPostBtn.disabled = true;
+
+  const entry = { date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}), text, reply: null };
+  moments.push(entry);
+  save.moments();
+  renderMoments();
+
+  const diarySystem = persona.system + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说"辛苦了"这种空话。可以写长一点，3-6句话。";
+
+  try{
+    const reply = await callChat(diarySystem, [{role:'user', content:text}], 500);
+    entry.reply = reply;
+    save.moments();
+    renderMoments();
+  }catch(e){
+    entry.reply = '（评论失败了：' + e.message + '）';
+    save.moments();
+    renderMoments();
+  }
+  momentPostBtn.disabled = false;
+}
+momentPostBtn.addEventListener('click', postMoment);
+
+/* ---------- 设置 tab ---------- */
+const backendInput = document.getElementById('backendInput');
+const nameInput = document.getElementById('nameInput');
+const personaInput = document.getElementById('personaInput');
+const memoryListEl = document.getElementById('memoryList');
+
+function renderMemoryList(){
+  memoryListEl.innerHTML = '';
+  if(memories.length === 0){
+    memoryListEl.innerHTML = '<div class="memory-empty">还没有记住什么，多聊几句就会开始记录了</div>';
+    return;
+  }
+  memories.forEach((mem, idx) => {
+    const row = document.createElement('div');
+    row.className = 'memory-item';
+    const span = document.createElement('span');
+    span.textContent = mem;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'memory-del';
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', () => {
+      memories.splice(idx, 1);
+      save.memories();
+      renderMemoryList();
+    });
+    row.appendChild(span); row.appendChild(delBtn);
+    memoryListEl.appendChild(row);
+  });
+}
+
+document.getElementById('saveConnBtn').addEventListener('click', () => {
+  backendUrl = backendInput.value.trim();
+  save.backend();
+  alert('已保存');
+});
+document.getElementById('savePersonaBtn').addEventListener('click', () => {
+  persona.name = nameInput.value.trim() || DEFAULT_PERSONA.name;
+  persona.system = personaInput.value.trim() || DEFAULT_PERSONA.system;
+  save.persona();
+  renderPersona();
+  alert('已保存');
+});
+
+/* ---------- 初始化 ---------- */
+function init(){
+  renderPersona();
   backendInput.value = backendUrl;
   nameInput.value = persona.name;
   personaInput.value = persona.system;
-  modalMask.classList.add('open');
-});
-document.getElementById('cancelBtn').addEventListener('click', () => modalMask.classList.remove('open'));
-document.getElementById('saveBtn').addEventListener('click', () => {
-  backendUrl = backendInput.value.trim();
-  persona.name = nameInput.value.trim() || DEFAULT_PERSONA.name;
-  persona.system = personaInput.value.trim() || DEFAULT_PERSONA.system;
-  localStorage.setItem('mp_backend', backendUrl);
-  localStorage.setItem('mp_persona', JSON.stringify(persona));
-  renderPersona();
-  modalMask.classList.remove('open');
-});
 
+  if(history.length === 0){
+    addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
+  } else {
+    history.forEach(m => addBubble(chatEl, m.role, m.content));
+  }
+  if(!backendUrl){
+    addBubble(chatEl, 'assistant', '（先去"设置"填一下后端地址，才能真正聊起来哦）');
+  }
+  renderMoments();
+  renderMemoryList();
+}
 init();
 </script>
 </body>
