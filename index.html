@@ -346,7 +346,7 @@ async function postMoment(){
   save.moments();
   renderMoments();
 
-  const diarySystem = persona.system + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说"辛苦了"这种空话。可以写长一点，3-6句话。";
+  const diarySystem = persona.system + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
 
   try{
     const reply = await callChat(diarySystem, [{role:'user', content:text}], 500);
