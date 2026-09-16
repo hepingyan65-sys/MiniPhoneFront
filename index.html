@@ -274,6 +274,38 @@ async function tryExtractMemory(recentMessages){
   }catch(e){ /* 静默失败，不影响聊天 */ }
 }
 
+function timeOfDayLabel(d){
+  const h = d.getHours();
+  if(h < 5) return "深夜";
+  if(h < 9) return "清晨";
+  if(h < 12) return "上午";
+  if(h < 14) return "中午";
+  if(h < 18) return "下午";
+  if(h < 22) return "晚上";
+  return "深夜";
+}
+
+function buildTimeContext(lastTs){
+  const now = new Date();
+  const nowStr = now.getMonth()+1 + "月" + now.getDate() + "日 " + timeOfDayLabel(now) + " " + now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+  let note = `[当前时间：${nowStr}。`;
+  if(lastTs){
+    const gapMs = now - lastTs;
+    const gapHours = gapMs / 3600000;
+    if(gapHours >= 1){
+      const gapDays = gapHours / 24;
+      const gapText = gapDays >= 1 ? `约${Math.round(gapDays*10)/10}天` : `约${Math.round(gapHours)}小时`;
+      note += `距离对方上一条消息已经过去了${gapText}。如果合适，可以自然地体现出这种时间流逝感（比如问候、感叹好久没聊、或呼应现在的时段），但不要每次都刻意强调，看情况自然带一句就好。`;
+    } else {
+      note += `距离上一条消息没过多久，正常聊天就好，不用特意提时间。`;
+    }
+  } else {
+    note += `这是第一次开口，可以按现在的时段自然打招呼。`;
+  }
+  note += `]`;
+  return note;
+}
+
 async function sendChat(){
   const text = input.value.trim();
   if(!text) return;
@@ -281,18 +313,25 @@ async function sendChat(){
   input.value = '';
   sendBtn.disabled = true;
 
+  const lastTs = history.length ? history[history.length - 1].ts : null;
+  const timeNote = buildTimeContext(lastTs);
+
   addBubble(chatEl, 'user', text);
-  history.push({role:'user', content:text});
+  history.push({role:'user', content:text, ts: Date.now()});
   save.history();
 
   const typingBubble = addBubble(chatEl, 'assistant', '正在输入…');
   typingBubble.classList.add('typing');
 
   try{
-    const reply = await callChat(persona.system, history.map(m => ({role:m.role, content:m.content})), 300);
+    const memoryNote = memories.length
+      ? "\n\n[你还记得关于对方的这些事，可以自然地在合适的时候体现出来，不要生硬地逐条背出来：\n" + memories.map(m => "- " + m).join("\n") + "]"
+      : "";
+    const systemForCall = persona.system + "\n\n" + timeNote + memoryNote;
+    const reply = await callChat(systemForCall, history.map(m => ({role:m.role, content:m.content})), 300);
     typingBubble.classList.remove('typing');
     typingBubble.textContent = reply;
-    history.push({role:'assistant', content:reply});
+    history.push({role:'assistant', content:reply, ts: Date.now()});
     save.history();
     tryExtractMemory(history.slice(-6));
   }catch(e){
@@ -346,7 +385,10 @@ async function postMoment(){
   save.moments();
   renderMoments();
 
-  const diarySystem = persona.system + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
+  const memoryNote = memories.length
+    ? "\n\n[你还记得关于对方的这些事：\n" + memories.map(m => "- " + m).join("\n") + "]"
+    : "";
+  const diarySystem = persona.system + memoryNote + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
 
   try{
     const reply = await callChat(diarySystem, [{role:'user', content:text}], 500);
