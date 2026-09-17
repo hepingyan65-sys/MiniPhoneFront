@@ -170,6 +170,7 @@
             <label>说话方式（system prompt）</label>
             <textarea id="personaInput"></textarea>
             <button class="settings-save" id="savePersonaBtn">保存</button>
+            <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14); margin-left:8px;">清空聊天记录</button>
           </div>
           <div class="settings-section">
             <h4>Ta 记住的事</h4>
@@ -327,7 +328,7 @@ async function sendChat(){
     const memoryNote = memories.length
       ? "\n\n[你还记得关于对方的这些事，可以自然地在合适的时候体现出来，不要生硬地逐条背出来：\n" + memories.map(m => "- " + m).join("\n") + "]"
       : "";
-    const systemForCall = persona.system + "\n\n" + timeNote + memoryNote;
+    const systemForCall = "你现在的说话方式和性格设定如下，请完全按照这个表现，不要被你在这段对话历史里已经说过的语气习惯影响：\n" + persona.system + "\n\n" + timeNote + memoryNote;
     const reply = await callChat(systemForCall, history.map(m => ({role:m.role, content:m.content})), 300);
     typingBubble.classList.remove('typing');
     typingBubble.textContent = reply;
@@ -386,7 +387,7 @@ async function postMoment(){
   renderMoments();
 
   const memoryNote = memories.length
-    ? "\n\n[你还记得关于对方的这些事：\n" + memories.map(m => "- " + m).join("\n") + "]"
+    ? "\n\n[你还记得关于对方的这些事，可以自然地在合适的时候体现出来，不要生硬地逐条背出来：\n" + memories.map(m => "- " + m).join("\n") + "]"
     : "";
   const diarySystem = persona.system + memoryNote + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
 
@@ -395,6 +396,7 @@ async function postMoment(){
     entry.reply = reply;
     save.moments();
     renderMoments();
+    tryExtractMemory([{role:'user', content:text}, {role:'assistant', content:reply}]);
   }catch(e){
     entry.reply = '（评论失败了：' + e.message + '）';
     save.moments();
@@ -445,6 +447,13 @@ document.getElementById('savePersonaBtn').addEventListener('click', () => {
   save.persona();
   renderPersona();
   alert('已保存');
+});
+document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+  if(!confirm('确定要清空聊天记录吗？（"动态"和"设置"里的记忆不会受影响）')) return;
+  history = [];
+  save.history();
+  chatEl.innerHTML = '';
+  addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
 });
 
 /* ---------- 初始化 ---------- */
