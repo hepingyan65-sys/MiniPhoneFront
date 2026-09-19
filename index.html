@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="小手机">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>小手机</title>
 <style>
   :root{
@@ -173,6 +178,11 @@
             <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14); margin-left:8px;">清空聊天记录</button>
           </div>
           <div class="settings-section">
+            <h4>主动消息通知</h4>
+            <div id="notifyStatus" style="font-size:12.5px; color:var(--ink-dim); margin-bottom:8px;">还没开启</div>
+            <button class="settings-save" id="enableNotifyBtn">开启通知</button>
+          </div>
+          <div class="settings-section">
             <h4>Ta 记住的事</h4>
             <div id="memoryList"></div>
           </div>
@@ -271,6 +281,7 @@ async function tryExtractMemory(recentMessages){
     if(data && data.memory && !memories.includes(data.memory)){
       memories.push(data.memory);
       save.memories();
+      syncContext();
     }
   }catch(e){ /* 静默失败，不影响聊天 */ }
 }
@@ -430,6 +441,7 @@ function renderMemoryList(){
       memories.splice(idx, 1);
       save.memories();
       renderMemoryList();
+      syncContext();
     });
     row.appendChild(span); row.appendChild(delBtn);
     memoryListEl.appendChild(row);
@@ -446,6 +458,7 @@ document.getElementById('savePersonaBtn').addEventListener('click', () => {
   persona.system = personaInput.value.trim() || DEFAULT_PERSONA.system;
   save.persona();
   renderPersona();
+  syncContext();
   alert('已保存');
 });
 document.getElementById('clearHistoryBtn').addEventListener('click', () => {
@@ -455,6 +468,105 @@ document.getElementById('clearHistoryBtn').addEventListener('click', () => {
   chatEl.innerHTML = '';
   addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
 });
+
+/* ---------- 通知 ---------- */
+const notifyStatus = document.getElementById('notifyStatus');
+const enableNotifyBtn = document.getElementById('enableNotifyBtn');
+let swRegistration = null;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function syncContext(){
+  if(!backendUrl) return;
+  try{
+    await fetch(backendUrl.replace(/\/$/, '') + '/sync-context', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ persona, memories })
+    });
+  }catch(e){ /* 静默失败，不影响主要功能 */ }
+}
+
+async function checkNotifyStatus(){
+  if(!('Notification' in window)){
+    notifyStatus.textContent = '这个浏览器不支持通知';
+    enableNotifyBtn.disabled = true;
+    return;
+  }
+  if(Notification.permission === 'granted' && swRegistration){
+    const sub = await swRegistration.pushManager.getSubscription();
+    notifyStatus.textContent = sub ? '已开启 ✅' : '权限已给，但还没订阅，点一下按钮';
+  } else if(Notification.permission === 'denied'){
+    notifyStatus.textContent = '被拒绝了，需要去手机系统设置里手动打开通知权限';
+  } else {
+    notifyStatus.textContent = '还没开启';
+  }
+}
+
+async function enableNotify(){
+  if(!backendUrl){ alert('先在上面填好后端地址'); return; }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+    alert('这个浏览器/系统版本不支持推送通知（iOS 需要 16.4 及以上，并且是从主屏幕图标打开的"小手机"，不是 Safari 标签页里打开的）');
+    return;
+  }
+  try{
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      notifyStatus.textContent = '你没有允许通知权限';
+      return;
+    }
+    if(!swRegistration) swRegistration = await navigator.serviceWorker.ready;
+
+    const keyRes = await fetch(backendUrl.replace(/\/$/, '') + '/vapid-public-key');
+    const { publicKey } = await keyRes.json();
+
+    let sub = await swRegistration.pushManager.getSubscription();
+    if(!sub){
+      sub = await swRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+    }
+
+    await fetch(backendUrl.replace(/\/$/, '') + '/subscribe', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub, persona, memories })
+    });
+
+    notifyStatus.textContent = '已开启 ✅';
+  }catch(e){
+    notifyStatus.textContent = '开启失败：' + e.message;
+  }
+}
+enableNotifyBtn.addEventListener('click', enableNotify);
+
+async function checkPendingMessages(){
+  if(!backendUrl) return;
+  try{
+    const res = await fetch(backendUrl.replace(/\/$/, '') + '/pending-messages');
+    const data = await res.json();
+    const pending = (data && data.messages) || [];
+    if(pending.length === 0) return;
+    pending.forEach(msg => {
+      addBubble(chatEl, 'assistant', msg.text);
+      history.push({role:'assistant', content: msg.text, ts: msg.sentAt || Date.now()});
+    });
+    save.history();
+    await fetch(backendUrl.replace(/\/$/, '') + '/ack-messages', { method: "POST" });
+  }catch(e){ /* 静默失败 */ }
+}
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(reg => { swRegistration = reg; checkNotifyStatus(); }).catch(()=>{});
+}
 
 /* ---------- 初始化 ---------- */
 function init(){
@@ -473,6 +585,7 @@ function init(){
   }
   renderMoments();
   renderMemoryList();
+  checkPendingMessages();
 }
 init();
 </script>
