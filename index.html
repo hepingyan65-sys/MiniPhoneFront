@@ -163,6 +163,14 @@
         <div class="header"><div class="plain-title">设置</div></div>
         <div class="settings-body">
           <div class="settings-section">
+            <h4>数据迁移（换浏览器/设备用）</h4>
+            <textarea id="migrateArea" placeholder="点下面“导出”会把数据填进这里；要导入的话，把从别的地方复制来的内容粘贴进这里，再点“导入”"></textarea>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button class="settings-save" id="exportBtn">导出到上面</button>
+              <button class="settings-save" id="importBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14);">从上面导入</button>
+            </div>
+          </div>
+          <div class="settings-section">
             <h4>连接</h4>
             <label>后端地址</label>
             <input id="backendInput" placeholder="https://xxx.up.railway.app">
@@ -176,6 +184,13 @@
             <textarea id="personaInput"></textarea>
             <button class="settings-save" id="savePersonaBtn">保存</button>
             <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14); margin-left:8px;">清空聊天记录</button>
+          </div>
+          <div class="settings-section">
+            <h4>备份 / 换设备</h4>
+            <button class="settings-save" id="exportBtn">导出数据（复制到剪贴板）</button>
+            <label>粘贴数据来导入：</label>
+            <textarea id="importInput" placeholder="把之前导出的内容粘贴在这里"></textarea>
+            <button class="settings-save" id="importBtn">确认导入</button>
           </div>
           <div class="settings-section">
             <h4>主动消息通知</h4>
@@ -447,6 +462,27 @@ function renderMemoryList(){
     memoryListEl.appendChild(row);
   });
 }
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const payload = JSON.stringify({ persona, memories, history, moments });
+  document.getElementById('migrateArea').value = payload;
+});
+document.getElementById('importBtn').addEventListener('click', () => {
+  const text = document.getElementById('migrateArea').value.trim();
+  if(!text){ alert('先把要导入的内容粘贴到上面的框里'); return; }
+  if(!confirm('导入会覆盖当前这台设备上的人设、记忆、聊天记录和动态，确定吗？')) return;
+  try{
+    const obj = JSON.parse(text);
+    if(obj.persona) { persona = obj.persona; save.persona(); }
+    if(obj.memories) { memories = obj.memories; save.memories(); }
+    if(obj.history) { history = obj.history; save.history(); }
+    if(obj.moments) { moments = obj.moments; save.moments(); }
+    alert('导入成功，页面马上刷新一下');
+    location.reload();
+  }catch(e){
+    alert('导入失败，内容格式不对，检查一下是不是完整复制了：' + e.message);
+  }
+});
 
 document.getElementById('saveConnBtn').addEventListener('click', () => {
   backendUrl = backendInput.value.trim();
