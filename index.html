@@ -552,6 +552,13 @@ async function enableNotify(){
     alert('这个浏览器/系统版本不支持推送通知（iOS 需要 16.4 及以上，并且是从主屏幕图标打开的"小手机"，不是 Safari 标签页里打开的）');
     return;
   }
+  // iOS 第一次加载 Service Worker 时，页面本身还没被它"接管"，这时候调用推送相关的 API 会报错
+  // 这种情况下刷新一次页面就好了
+  if(!navigator.serviceWorker.controller){
+    notifyStatus.textContent = '第一次需要刷新一下，马上自动刷新…';
+    location.reload();
+    return;
+  }
   try{
     const permission = await Notification.requestPermission();
     if(permission !== 'granted'){
