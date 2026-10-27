@@ -65,6 +65,32 @@
   .row.ai .bubble{ background: var(--bubble-ai); color: var(--ink); border: 1px solid rgba(227,161,92,.18); border-top-left-radius:4px; box-shadow: 0 0 14px rgba(227,161,92,.06); }
   .row.me .bubble{ background: var(--bubble-me); color: var(--ink); border-top-right-radius:4px; }
   .bubble.typing{ color: var(--ink-dim); font-style: italic; }
+  .bubble img{ max-width:100%; border-radius:10px; display:block; margin-top:6px; }
+  .bubble img:first-child{ margin-top:0; }
+
+  /* 消息出现的轻微动效 */
+  .row{ animation: bubbleIn .28s ease; }
+  @keyframes bubbleIn{ from{ opacity:0; transform: translateY(8px) scale(.97); } to{ opacity:1; transform: translateY(0) scale(1); } }
+
+  /* 正在输入的跳动小点 */
+  .bubble.typing-dots{ display:flex; gap:4px; align-items:center; padding:12px 16px; }
+  .bubble.typing-dots .dot{ width:6px; height:6px; border-radius:50%; background: var(--ink-dim); animation: typingPulse 1.2s infinite ease-in-out; }
+  .bubble.typing-dots .dot:nth-child(2){ animation-delay:.2s; }
+  .bubble.typing-dots .dot:nth-child(3){ animation-delay:.4s; }
+  @keyframes typingPulse{ 0%,60%,100%{ transform:scale(1); opacity:.4; } 30%{ transform:scale(1.3); opacity:1; } }
+
+  .attach-btn{
+    width:36px; height:36px; border-radius:50%; border:1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.04); color: var(--ink-dim); font-size:16px; cursor:pointer; flex-shrink:0;
+  }
+  .image-preview-bar{
+    display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--card-line);
+  }
+  .image-preview-bar img{ width:36px; height:36px; object-fit:cover; border-radius:8px; }
+  .image-preview-bar button{
+    background:transparent; border:1px solid rgba(255,255,255,.14); color: var(--ink-dim);
+    border-radius:8px; width:22px; height:22px; font-size:12px; cursor:pointer;
+  }
   .inputbar{ display:flex; align-items:flex-end; gap:8px; padding: 10px 12px 14px; border-top: 1px solid var(--card-line); background: linear-gradient(180deg, transparent, rgba(5,5,8,.4)); flex-shrink:0; }
   textarea{ flex:1; resize:none; border-radius:16px; border:1px solid rgba(255,255,255,.12); padding: 9px 12px; font-size:16px; font-family:inherit; color: var(--ink); background: rgba(255,255,255,.04); max-height:80px; min-height:36px; outline:none; }
   textarea::placeholder{ color: var(--ink-dim); }
@@ -152,7 +178,14 @@
           </div>
         </div>
         <div class="chat" id="chat"></div>
+        <div class="image-preview-bar" id="imagePreviewBar" style="display:none;">
+          <img id="imagePreviewThumb" alt="预览">
+          <span style="flex:1; font-size:12px; color:var(--ink-dim);">已选好一张图片</span>
+          <button id="removeImageBtn">×</button>
+        </div>
         <div class="inputbar">
+          <input type="file" id="imageInput" accept="image/*" style="display:none;">
+          <button class="attach-btn" id="attachBtn" title="发图片">🖼</button>
           <textarea id="input" rows="1" placeholder="想说点什么…"></textarea>
           <button class="send" id="sendBtn">寄出</button>
         </div>
@@ -177,20 +210,8 @@
             <button class="settings-save" id="saveConnBtn">保存</button>
           </div>
           <div class="settings-section">
-            <h4>人设</h4>
-            <label>名字</label>
-            <input id="nameInput" maxlength="12">
-            <label>说话方式（system prompt）</label>
-            <textarea id="personaInput"></textarea>
-            <button class="settings-save" id="savePersonaBtn">保存</button>
-            <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14); margin-left:8px;">清空聊天记录</button>
-          </div>
-          <div class="settings-section">
-            <h4>备份 / 换设备</h4>
-            <button class="settings-save" id="exportBtn">导出数据（复制到剪贴板）</button>
-            <label>粘贴数据来导入：</label>
-            <textarea id="importInput" placeholder="把之前导出的内容粘贴在这里"></textarea>
-            <button class="settings-save" id="importBtn">确认导入</button>
+            <h4>聊天记录</h4>
+            <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14);">清空聊天记录</button>
           </div>
           <div class="settings-section">
             <h4>主动消息通知</h4>
@@ -215,12 +236,23 @@
 
 <script>
 /* ---------- 状态 ---------- */
-const DEFAULT_PERSONA = {
-  name: "阿澄",
-  system: "你是阿澄，说话人的一个熟悉多年的朋友。性格温和、体贴，但不谄媚，会认真回应对方说的事。回复保持简短口语化，像发消息一样。"
-};
 let backendUrl = localStorage.getItem('mp_backend') || '';
-let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { ...DEFAULT_PERSONA };
+// 人设现在固定写死在后端（server.js 里的 PERSONA_SYSTEM），这里只是本地缓存，
+// 真正的内容每次打开 App 都会去后端重新拿一次，见下面的 loadPersonaFromBackend()
+let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { name: "Alistair", system: "" };
+
+async function loadPersonaFromBackend(){
+  if(!backendUrl) return;
+  try{
+    const res = await fetch(backendUrl.replace(/\/$/, '') + '/persona');
+    const data = await res.json();
+    if(data && data.system){
+      persona = { name: data.name || "Alistair", system: data.system };
+      save.persona();
+      renderPersona();
+    }
+  }catch(e){ /* 拿不到就先用本地缓存的旧版本，不影响基本使用 */ }
+}
 let history = JSON.parse(localStorage.getItem('mp_history') || '[]');
 let moments = JSON.parse(localStorage.getItem('mp_moments') || '[]');
 let memories = JSON.parse(localStorage.getItem('mp_memories') || '[]');
@@ -256,18 +288,63 @@ const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const personaNameEl = document.getElementById('personaName');
 const avatarLetterEl = document.getElementById('avatarLetter');
+const attachBtn = document.getElementById('attachBtn');
+const imageInput = document.getElementById('imageInput');
+const imagePreviewBar = document.getElementById('imagePreviewBar');
+const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+const removeImageBtn = document.getElementById('removeImageBtn');
+let selectedImage = null; // data URL
+
+attachBtn.addEventListener('click', () => imageInput.click());
+imageInput.addEventListener('change', () => {
+  const file = imageInput.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedImage = reader.result;
+    imagePreviewThumb.src = selectedImage;
+    imagePreviewBar.style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+  imageInput.value = '';
+});
+removeImageBtn.addEventListener('click', () => {
+  selectedImage = null;
+  imagePreviewBar.style.display = 'none';
+});
 
 function renderPersona(){
   personaNameEl.textContent = persona.name;
   avatarLetterEl.textContent = persona.name.slice(0,1);
 }
 
-function addBubble(container, role, text){
+function addBubble(container, role, text, imageDataUrl){
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'ai');
   const b = document.createElement('div');
   b.className = 'bubble';
-  b.textContent = text;
+  if(imageDataUrl){
+    const img = document.createElement('img');
+    img.src = imageDataUrl;
+    b.appendChild(img);
+  }
+  if(text){
+    const span = document.createElement('div');
+    span.textContent = text;
+    b.appendChild(span);
+  }
+  row.appendChild(b);
+  container.appendChild(row);
+  container.scrollTop = container.scrollHeight;
+  return b;
+}
+
+function addTypingDots(container){
+  const row = document.createElement('div');
+  row.className = 'row ai';
+  const b = document.createElement('div');
+  b.className = 'bubble typing-dots';
+  b.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
   row.appendChild(b);
   container.appendChild(row);
   container.scrollTop = container.scrollHeight;
@@ -335,20 +412,26 @@ function buildTimeContext(lastTs){
 
 async function sendChat(){
   const text = input.value.trim();
-  if(!text) return;
+  const image = selectedImage;
+  if(!text && !image) return;
   if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
   input.value = '';
+  selectedImage = null;
+  imagePreviewBar.style.display = 'none';
   sendBtn.disabled = true;
 
   const lastTs = history.length ? history[history.length - 1].ts : null;
   const timeNote = buildTimeContext(lastTs);
 
-  addBubble(chatEl, 'user', text);
-  history.push({role:'user', content:text, ts: Date.now()});
+  addBubble(chatEl, 'user', text, image);
+  // content 是真正发给模型的格式：有图片时用多模态的数组格式，没有图片就还是纯文本
+  const userContent = image
+    ? [{ type: "image_url", image_url: { url: image } }, { type: "text", text: text || "（发了一张图片）" }]
+    : text;
+  history.push({ role:'user', content:userContent, displayText:text, displayImage:image, ts: Date.now() });
   save.history();
 
-  const typingBubble = addBubble(chatEl, 'assistant', '正在输入…');
-  typingBubble.classList.add('typing');
+  const typingBubble = addTypingDots(chatEl);
 
   try{
     const memoryNote = memories.length
@@ -356,13 +439,18 @@ async function sendChat(){
       : "";
     const systemForCall = "你现在的说话方式和性格设定如下，请完全按照这个表现，不要被你在这段对话历史里已经说过的语气习惯影响：\n" + persona.system + "\n\n" + timeNote + memoryNote;
     const reply = await callChat(systemForCall, history.map(m => ({role:m.role, content:m.content})), 300);
-    typingBubble.classList.remove('typing');
+    typingBubble.classList.remove('typing-dots');
+    typingBubble.innerHTML = '';
     typingBubble.textContent = reply;
-    history.push({role:'assistant', content:reply, ts: Date.now()});
+    history.push({role:'assistant', content:reply, displayText:reply, displayImage:null, ts: Date.now()});
     save.history();
-    tryExtractMemory(history.slice(-6));
+    tryExtractMemory(history.slice(-6).map(m => ({
+      role: m.role,
+      content: m.displayImage ? '[发了一张图片] ' + (m.displayText || '') : (m.displayText !== undefined ? m.displayText : m.content)
+    })));
   }catch(e){
-    typingBubble.classList.remove('typing');
+    typingBubble.classList.remove('typing-dots');
+    typingBubble.innerHTML = '';
     typingBubble.textContent = '（信号好像断了：' + e.message + '）';
   }
   sendBtn.disabled = false;
@@ -434,8 +522,6 @@ momentPostBtn.addEventListener('click', postMoment);
 
 /* ---------- 设置 tab ---------- */
 const backendInput = document.getElementById('backendInput');
-const nameInput = document.getElementById('nameInput');
-const personaInput = document.getElementById('personaInput');
 const memoryListEl = document.getElementById('memoryList');
 
 function renderMemoryList(){
@@ -487,14 +573,7 @@ document.getElementById('importBtn').addEventListener('click', () => {
 document.getElementById('saveConnBtn').addEventListener('click', () => {
   backendUrl = backendInput.value.trim();
   save.backend();
-  alert('已保存');
-});
-document.getElementById('savePersonaBtn').addEventListener('click', () => {
-  persona.name = nameInput.value.trim() || DEFAULT_PERSONA.name;
-  persona.system = personaInput.value.trim() || DEFAULT_PERSONA.system;
-  save.persona();
-  renderPersona();
-  syncContext();
+  loadPersonaFromBackend();
   alert('已保存');
 });
 document.getElementById('clearHistoryBtn').addEventListener('click', () => {
@@ -615,13 +694,12 @@ if('serviceWorker' in navigator){
 function init(){
   renderPersona();
   backendInput.value = backendUrl;
-  nameInput.value = persona.name;
-  personaInput.value = persona.system;
+  loadPersonaFromBackend();
 
   if(history.length === 0){
     addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
   } else {
-    history.forEach(m => addBubble(chatEl, m.role, m.content));
+    history.forEach(m => addBubble(chatEl, m.role, m.displayText !== undefined ? m.displayText : m.content, m.displayImage));
   }
   if(!backendUrl){
     addBubble(chatEl, 'assistant', '（先去"设置"填一下后端地址，才能真正聊起来哦）');
