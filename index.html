@@ -19,7 +19,7 @@
     --card: #1A1D2C; --card-line: rgba(255,255,255,.08);
   }
   *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;}
+  html,body{height:100%;margin:0; background:#0A0A10;}
   body{
     height: 100dvh;
     background: radial-gradient(ellipse 900px 600px at 50% -10%, #23283f 0%, #0A0A10 55%, #050507 100%);
@@ -33,7 +33,15 @@
     box-shadow: 0 0 0 1px var(--frame-edge), 0 40px 80px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.04);
     display:flex; flex-direction:column; position:relative;
   }
-  @media (max-width: 480px){ .phone{ width:100vw; height:100dvh; border-radius:0; padding:0; } .screen{ border-radius:0; } }
+  @media (max-width: 480px){
+    body{ padding:0; }
+    .phone{
+      width:100vw; height:100dvh; border-radius:0; padding:0;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .screen{ border-radius:0; }
+  }
   .screen{
     flex:1; border-radius:26px; overflow:hidden; display:flex; flex-direction:column; position:relative;
     background: radial-gradient(420px 260px at 30% 0%, rgba(227,161,92,.14), transparent 60%), linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
