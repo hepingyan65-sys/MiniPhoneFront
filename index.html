@@ -382,7 +382,10 @@ function renderPersona(){
 const ACTIVITY_LABEL = { work: '工作中', free: '休息中', sleep: '睡着了' };
 function updateStatus(status){
   if(!status) return;
-  statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + (ACTIVITY_LABEL[status.activity] || '');
+  const label = status.online ? '在线' : (ACTIVITY_LABEL[status.activity] || '');
+  statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + label;
+  // 他在线的时候前端看得勤一点，免得他回了你半天才看到
+  if(status.online) liveUntil = Date.now() + 3 * 60 * 1000;
 }
 
 function addBubble(container, role, text, imageDataUrl){
@@ -432,9 +435,11 @@ let emptyNote = null;
 
 // 去后端拉新消息
 let syncing = false, sending = false;
+let lastSyncAt = 0, liveUntil = 0;
 async function syncMessages(){
   if(!backendUrl || syncing || sending) return;
   syncing = true;
+  lastSyncAt = Date.now();
   try{
     const after = localHistory.length ? localHistory[localHistory.length - 1].ts : 0;
     const data = await api('/messages?after=' + after, { timeout: 30000 });
@@ -482,8 +487,12 @@ async function sendChat(){
 sendBtn.addEventListener('click', sendChat);
 input.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat(); } });
 
-// App 开着的时候每 15 秒看一眼有没有新消息；从后台切回来时也马上看一眼
-setInterval(() => { if(document.visibilityState === 'visible') syncMessages(); }, 15000);
+// App 开着的时候定时看一眼有没有新消息：他在线时每 4 秒，不在线时每 15 秒；从后台切回来也马上看一眼
+setInterval(() => {
+  if(document.visibilityState !== 'visible') return;
+  const interval = Date.now() < liveUntil ? 4000 : 15000;
+  if(Date.now() - lastSyncAt >= interval) syncMessages();
+}, 2000);
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncMessages(); });
 
 /* ---------- 动态 tab（日记评论还是即时的） ---------- */
