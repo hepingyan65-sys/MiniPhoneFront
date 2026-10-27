@@ -38,7 +38,7 @@
     .phone{
       width:100vw; height:100dvh; border-radius:0; padding:0;
       padding-top: env(safe-area-inset-top, 0px);
-      padding-bottom: env(safe-area-inset-bottom, 0px);
+      /* 底部安全区不在这里留了：交给下面的 tabbar 自己往下铺，避免留两遍出现一条空白 */
     }
     .screen{ border-radius:0; }
   }
@@ -73,6 +73,7 @@
   .row.ai .bubble{ background: var(--bubble-ai); color: var(--ink); border: 1px solid rgba(227,161,92,.18); border-top-left-radius:4px; box-shadow: 0 0 14px rgba(227,161,92,.06); }
   .row.me .bubble{ background: var(--bubble-me); color: var(--ink); border-top-right-radius:4px; }
   .bubble.typing{ color: var(--ink-dim); font-style: italic; }
+  .note{ align-self:center; font-size:11.5px; color: var(--ink-dim); padding:4px 10px; text-align:center; }
   .bubble img{ max-width:100%; border-radius:10px; display:block; margin-top:6px; }
   .bubble img:first-child{ margin-top:0; }
 
@@ -182,7 +183,7 @@
           <div class="avatar" id="avatarLetter">阿</div>
           <div class="who">
             <div class="name" id="personaName">阿澄</div>
-            <div class="status-line">在线 · 正在等你说话</div>
+            <div class="status-line" id="statusLine">伦敦</div>
           </div>
         </div>
         <div class="chat" id="chat"></div>
@@ -204,8 +205,8 @@
         <div class="header"><div class="plain-title">设置</div></div>
         <div class="settings-body">
           <div class="settings-section">
-            <h4>数据迁移（换浏览器/设备用）</h4>
-            <textarea id="migrateArea" placeholder="点下面“导出”会把数据填进这里；要导入的话，把从别的地方复制来的内容粘贴进这里，再点“导入”"></textarea>
+            <h4>备份日记（换浏览器/设备用）</h4>
+            <textarea id="migrateArea" placeholder="聊天记录和记忆已经存在后端了，这里只备份“动态”里的日记。点“导出”会把日记填进这里；要导入就把复制来的内容粘贴进来，再点“导入”"></textarea>
             <div style="display:flex; gap:8px; margin-top:8px;">
               <button class="settings-save" id="exportBtn">导出到上面</button>
               <button class="settings-save" id="importBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14);">从上面导入</button>
@@ -214,7 +215,7 @@
           <div class="settings-section">
             <h4>连接</h4>
             <label>后端地址</label>
-            <input id="backendInput" placeholder="https://xxx.up.railway.app">
+            <input id="backendInput" placeholder="https://xxx.onrender.com">
             <button class="settings-save" id="saveConnBtn">保存</button>
           </div>
           <div class="settings-section">
@@ -244,34 +245,65 @@
 
 <script>
 /* ---------- 状态 ---------- */
+// v2：聊天记录和记忆的"正本"都在后端数据库里，手机上只存一份副本方便离线翻看
 let backendUrl = localStorage.getItem('mp_backend') || '';
-// 人设现在固定写死在后端（server.js 里的 PERSONA_SYSTEM），这里只是本地缓存，
-// 真正的内容每次打开 App 都会去后端重新拿一次，见下面的 loadPersonaFromBackend()
 let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { name: "Alistair", system: "" };
+let localHistory = JSON.parse(localStorage.getItem('mp_history_v2') || '[]'); // [{id, role, text, hadImage, ts}]
+let thumbs = JSON.parse(localStorage.getItem('mp_thumbs') || '{}');           // { 消息时间: 缩略图 }
+let moments = JSON.parse(localStorage.getItem('mp_moments') || '[]');
+let memories = JSON.parse(localStorage.getItem('mp_memories') || '[]');
+
+function safeSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }catch(e){ return false; }
+}
+const save = {
+  history: () => safeSet('mp_history_v2', JSON.stringify(localHistory)),
+  moments: () => safeSet('mp_moments', JSON.stringify(moments)),
+  memories: () => safeSet('mp_memories', JSON.stringify(memories)),
+  persona: () => safeSet('mp_persona', JSON.stringify(persona)),
+  backend: () => safeSet('mp_backend', backendUrl),
+  // 缩略图存不下时，从最早的开始删，保证不会因为空间满了卡住
+  thumbs: () => {
+    const keys = Object.keys(thumbs).sort((a,b) => a - b);
+    while(!safeSet('mp_thumbs', JSON.stringify(thumbs)) && keys.length){ delete thumbs[keys.shift()]; }
+  },
+};
+
+// 统一的请求函数：带超时，返回内容看不懂时给出明确报错
+async function api(path, { method = 'GET', body, timeout = 60000 } = {}){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try{
+    const res = await fetch(backendUrl.replace(/\/$/, '') + path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+    let data;
+    try{ data = await res.json(); }
+    catch(_){ throw new Error('后端返回了看不懂的内容（状态码 ' + res.status + '）'); }
+    if(!res.ok) throw new Error(data.error || '请求失败');
+    return data;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('后端太久没回应，可能刚睡醒，等一下再试');
+    throw e;
+  }finally{
+    clearTimeout(timer);
+  }
+}
 
 async function loadPersonaFromBackend(){
   if(!backendUrl) return;
   try{
-    const res = await fetch(backendUrl.replace(/\/$/, '') + '/persona');
-    const data = await res.json();
+    const data = await api('/persona');
     if(data && data.system){
       persona = { name: data.name || "Alistair", system: data.system };
       save.persona();
       renderPersona();
     }
-  }catch(e){ /* 拿不到就先用本地缓存的旧版本，不影响基本使用 */ }
+  }catch(e){ /* 拿不到就先用本地缓存 */ }
 }
-let history = JSON.parse(localStorage.getItem('mp_history') || '[]');
-let moments = JSON.parse(localStorage.getItem('mp_moments') || '[]');
-let memories = JSON.parse(localStorage.getItem('mp_memories') || '[]');
-
-const save = {
-  history: () => localStorage.setItem('mp_history', JSON.stringify(history)),
-  moments: () => localStorage.setItem('mp_moments', JSON.stringify(moments)),
-  memories: () => localStorage.setItem('mp_memories', JSON.stringify(memories)),
-  persona: () => localStorage.setItem('mp_persona', JSON.stringify(persona)),
-  backend: () => localStorage.setItem('mp_backend', backendUrl),
-};
 
 function fmtClock(){
   const d = new Date();
@@ -286,7 +318,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab === 'settings') renderMemoryList();
+    if(btn.dataset.tab === 'settings') loadMemories();
   });
 });
 
@@ -296,22 +328,43 @@ const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const personaNameEl = document.getElementById('personaName');
 const avatarLetterEl = document.getElementById('avatarLetter');
+const statusLineEl = document.getElementById('statusLine');
 const attachBtn = document.getElementById('attachBtn');
 const imageInput = document.getElementById('imageInput');
 const imagePreviewBar = document.getElementById('imagePreviewBar');
 const imagePreviewThumb = document.getElementById('imagePreviewThumb');
 const removeImageBtn = document.getElementById('removeImageBtn');
-let selectedImage = null; // data URL
+let selectedImage = null; // { full: 发给模型的压缩图, thumb: 存在手机里的小缩略图 }
+
+function compressImage(dataUrl, maxSide, quality){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('这张图片读不出来，换一张试试'));
+    img.src = dataUrl;
+  });
+}
 
 attachBtn.addEventListener('click', () => imageInput.click());
 imageInput.addEventListener('change', () => {
   const file = imageInput.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
-    selectedImage = reader.result;
-    imagePreviewThumb.src = selectedImage;
-    imagePreviewBar.style.display = 'flex';
+  reader.onload = async () => {
+    try{
+      const full = await compressImage(reader.result, 1280, 0.8);
+      const thumb = await compressImage(reader.result, 360, 0.7);
+      selectedImage = { full, thumb };
+      imagePreviewThumb.src = thumb;
+      imagePreviewBar.style.display = 'flex';
+    }catch(e){ alert(e.message); }
   };
   reader.readAsDataURL(file);
   imageInput.value = '';
@@ -324,6 +377,12 @@ removeImageBtn.addEventListener('click', () => {
 function renderPersona(){
   personaNameEl.textContent = persona.name;
   avatarLetterEl.textContent = persona.name.slice(0,1);
+}
+
+const ACTIVITY_LABEL = { work: '工作中', free: '休息中', sleep: '睡着了' };
+function updateStatus(status){
+  if(!status) return;
+  statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + (ACTIVITY_LABEL[status.activity] || '');
 }
 
 function addBubble(container, role, text, imageDataUrl){
@@ -347,75 +406,50 @@ function addBubble(container, role, text, imageDataUrl){
   return b;
 }
 
-function addTypingDots(container){
+function addNote(text){
   const row = document.createElement('div');
-  row.className = 'row ai';
-  const b = document.createElement('div');
-  b.className = 'bubble typing-dots';
-  b.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
-  row.appendChild(b);
-  container.appendChild(row);
-  container.scrollTop = container.scrollHeight;
-  return b;
+  row.className = 'note';
+  row.textContent = text;
+  chatEl.appendChild(row);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return row;
 }
 
-async function callChat(system, messages, maxTokens){
-  const res = await fetch(backendUrl.replace(/\/$/, '') + '/chat', {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ system, messages, max_tokens: maxTokens })
-  });
-  const data = await res.json();
-  if(!res.ok) throw new Error(data.error || '请求失败');
-  return data.reply;
+function bubbleForMessage(m){
+  const thumb = thumbs[m.ts];
+  const text = m.text || (m.hadImage && !thumb ? '[图片]' : '');
+  addBubble(chatEl, m.role, text, thumb);
 }
 
-async function tryExtractMemory(recentMessages){
-  try{
-    const res = await fetch(backendUrl.replace(/\/$/, '') + '/extract-memory', {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ existingMemories: memories, recentMessages })
-    });
-    const data = await res.json();
-    if(data && data.memory && !memories.includes(data.memory)){
-      memories.push(data.memory);
-      save.memories();
-      syncContext();
-    }
-  }catch(e){ /* 静默失败，不影响聊天 */ }
-}
-
-function timeOfDayLabel(d){
-  const h = d.getHours();
-  if(h < 5) return "深夜";
-  if(h < 9) return "清晨";
-  if(h < 12) return "上午";
-  if(h < 14) return "中午";
-  if(h < 18) return "下午";
-  if(h < 22) return "晚上";
-  return "深夜";
-}
-
-function buildTimeContext(lastTs){
-  const now = new Date();
-  const nowStr = now.getMonth()+1 + "月" + now.getDate() + "日 " + timeOfDayLabel(now) + " " + now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
-  let note = `[当前时间：${nowStr}。`;
-  if(lastTs){
-    const gapMs = now - lastTs;
-    const gapHours = gapMs / 3600000;
-    if(gapHours >= 1){
-      const gapDays = gapHours / 24;
-      const gapText = gapDays >= 1 ? `约${Math.round(gapDays*10)/10}天` : `约${Math.round(gapHours)}小时`;
-      note += `距离对方上一条消息已经过去了${gapText}。如果合适，可以自然地体现出这种时间流逝感（比如问候、感叹好久没聊、或呼应现在的时段），但不要每次都刻意强调，看情况自然带一句就好。`;
-    } else {
-      note += `距离上一条消息没过多久，正常聊天就好，不用特意提时间。`;
-    }
-  } else {
-    note += `这是第一次开口，可以按现在的时段自然打招呼。`;
+function renderChat(){
+  chatEl.innerHTML = '';
+  if(localHistory.length === 0){
+    emptyNote = addNote('还没有消息，跟他说点什么吧');
   }
-  note += `]`;
-  return note;
+  localHistory.forEach(bubbleForMessage);
+}
+let emptyNote = null;
+
+// 去后端拉新消息
+let syncing = false, sending = false;
+async function syncMessages(){
+  if(!backendUrl || syncing || sending) return;
+  syncing = true;
+  try{
+    const after = localHistory.length ? localHistory[localHistory.length - 1].ts : 0;
+    const data = await api('/messages?after=' + after, { timeout: 30000 });
+    updateStatus(data.status);
+    let added = false;
+    (data.messages || []).forEach(m => {
+      if(localHistory.some(x => x.id === m.id)) return;
+      if(emptyNote){ emptyNote.remove(); emptyNote = null; }
+      localHistory.push(m);
+      bubbleForMessage(m);
+      added = true;
+    });
+    if(added) save.history();
+  }catch(e){ /* 拉不到就下次再拉 */ }
+  syncing = false;
 }
 
 async function sendChat(){
@@ -427,47 +461,32 @@ async function sendChat(){
   selectedImage = null;
   imagePreviewBar.style.display = 'none';
   sendBtn.disabled = true;
+  sending = true;
 
-  const lastTs = history.length ? history[history.length - 1].ts : null;
-  const timeNote = buildTimeContext(lastTs);
-
-  addBubble(chatEl, 'user', text, image);
-  // content 是真正发给模型的格式：有图片时用多模态的数组格式，没有图片就还是纯文本
-  const userContent = image
-    ? [{ type: "image_url", image_url: { url: image } }, { type: "text", text: text || "（发了一张图片）" }]
-    : text;
-  history.push({ role:'user', content:userContent, displayText:text, displayImage:image, ts: Date.now() });
-  save.history();
-
-  const typingBubble = addTypingDots(chatEl);
-
+  if(emptyNote){ emptyNote.remove(); emptyNote = null; }
+  addBubble(chatEl, 'user', text, image ? image.thumb : null);
   try{
-    const memoryNote = memories.length
-      ? "\n\n[你还记得关于对方的这些事，可以自然地在合适的时候体现出来，不要生硬地逐条背出来：\n" + memories.map(m => "- " + m).join("\n") + "]"
-      : "";
-    const systemForCall = "你现在的说话方式和性格设定如下，请完全按照这个表现，不要被你在这段对话历史里已经说过的语气习惯影响：\n" + persona.system + "\n\n" + timeNote + memoryNote;
-    const reply = await callChat(systemForCall, history.map(m => ({role:m.role, content:m.content})), 300);
-    typingBubble.classList.remove('typing-dots');
-    typingBubble.innerHTML = '';
-    typingBubble.textContent = reply;
-    history.push({role:'assistant', content:reply, displayText:reply, displayImage:null, ts: Date.now()});
+    const data = await api('/send', { method: 'POST', body: { text, image: image ? image.full : null }, timeout: 90000 });
+    const m = data.message;
+    localHistory.push(m);
     save.history();
-    tryExtractMemory(history.slice(-6).map(m => ({
-      role: m.role,
-      content: m.displayImage ? '[发了一张图片] ' + (m.displayText || '') : (m.displayText !== undefined ? m.displayText : m.content)
-    })));
+    if(image){ thumbs[m.ts] = image.thumb; save.thumbs(); }
   }catch(e){
-    typingBubble.classList.remove('typing-dots');
-    typingBubble.innerHTML = '';
-    typingBubble.textContent = '（信号好像断了：' + e.message + '）';
+    addNote('这条没发出去：' + e.message);
+  }finally{
+    sending = false;
+    sendBtn.disabled = false;
   }
-  sendBtn.disabled = false;
 }
 
 sendBtn.addEventListener('click', sendChat);
 input.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendChat(); } });
 
-/* ---------- 动态 tab ---------- */
+// App 开着的时候每 15 秒看一眼有没有新消息；从后台切回来时也马上看一眼
+setInterval(() => { if(document.visibilityState === 'visible') syncMessages(); }, 15000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') syncMessages(); });
+
+/* ---------- 动态 tab（日记评论还是即时的） ---------- */
 const momentInput = document.getElementById('momentInput');
 const momentPostBtn = document.getElementById('momentPostBtn');
 const momentsList = document.getElementById('momentsList');
@@ -514,17 +533,20 @@ async function postMoment(){
   const diarySystem = persona.system + memoryNote + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
 
   try{
-    const reply = await callChat(diarySystem, [{role:'user', content:text}], 500);
-    entry.reply = reply;
+    const data = await api('/chat', { method: 'POST', body: { system: diarySystem, messages: [{role:'user', content:text}], max_tokens: 500 }, timeout: 90000 });
+    entry.reply = data.reply;
     save.moments();
     renderMoments();
-    tryExtractMemory([{role:'user', content:text}, {role:'assistant', content:reply}]);
+    api('/extract-memory', { method: 'POST', body: { recentMessages: [{role:'user', content:text}, {role:'assistant', content:data.reply}] } })
+      .then(d => { if(d.memories){ memories = d.memories; save.memories(); } })
+      .catch(() => {});
   }catch(e){
     entry.reply = '（评论失败了：' + e.message + '）';
     save.moments();
     renderMoments();
+  }finally{
+    momentPostBtn.disabled = false;
   }
-  momentPostBtn.disabled = false;
 }
 momentPostBtn.addEventListener('click', postMoment);
 
@@ -546,31 +568,36 @@ function renderMemoryList(){
     const delBtn = document.createElement('button');
     delBtn.className = 'memory-del';
     delBtn.textContent = '×';
-    delBtn.addEventListener('click', () => {
-      memories.splice(idx, 1);
-      save.memories();
-      renderMemoryList();
-      syncContext();
+    delBtn.addEventListener('click', async () => {
+      try{
+        const data = await api('/memories/delete', { method: 'POST', body: { index: idx } });
+        memories = data.memories; save.memories(); renderMemoryList();
+      }catch(e){ alert('删除失败：' + e.message); }
     });
     row.appendChild(span); row.appendChild(delBtn);
     memoryListEl.appendChild(row);
   });
 }
 
+async function loadMemories(){
+  renderMemoryList();
+  if(!backendUrl) return;
+  try{
+    const data = await api('/memories');
+    memories = data.memories || []; save.memories(); renderMemoryList();
+  }catch(e){ /* 拿不到就先显示手机里的副本 */ }
+}
+
 document.getElementById('exportBtn').addEventListener('click', () => {
-  const payload = JSON.stringify({ persona, memories, history, moments });
-  document.getElementById('migrateArea').value = payload;
+  document.getElementById('migrateArea').value = JSON.stringify({ moments });
 });
 document.getElementById('importBtn').addEventListener('click', () => {
   const text = document.getElementById('migrateArea').value.trim();
   if(!text){ alert('先把要导入的内容粘贴到上面的框里'); return; }
-  if(!confirm('导入会覆盖当前这台设备上的人设、记忆、聊天记录和动态，确定吗？')) return;
+  if(!confirm('导入会覆盖这台设备上的日记，确定吗？')) return;
   try{
     const obj = JSON.parse(text);
-    if(obj.persona) { persona = obj.persona; save.persona(); }
-    if(obj.memories) { memories = obj.memories; save.memories(); }
-    if(obj.history) { history = obj.history; save.history(); }
-    if(obj.moments) { moments = obj.moments; save.moments(); }
+    if(obj.moments){ moments = obj.moments; save.moments(); }
     alert('导入成功，页面马上刷新一下');
     location.reload();
   }catch(e){
@@ -582,14 +609,17 @@ document.getElementById('saveConnBtn').addEventListener('click', () => {
   backendUrl = backendInput.value.trim();
   save.backend();
   loadPersonaFromBackend();
+  syncMessages();
   alert('已保存');
 });
-document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+document.getElementById('clearHistoryBtn').addEventListener('click', async () => {
   if(!confirm('确定要清空聊天记录吗？（"动态"和"设置"里的记忆不会受影响）')) return;
-  history = [];
-  save.history();
-  chatEl.innerHTML = '';
-  addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
+  try{
+    await api('/history/clear', { method: 'POST', body: {} });
+    localHistory = []; thumbs = {};
+    save.history(); save.thumbs();
+    renderChat();
+  }catch(e){ alert('清空失败：' + e.message); }
 });
 
 /* ---------- 通知 ---------- */
@@ -604,17 +634,6 @@ function urlBase64ToUint8Array(base64String) {
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
-}
-
-async function syncContext(){
-  if(!backendUrl) return;
-  try{
-    await fetch(backendUrl.replace(/\/$/, '') + '/sync-context', {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ persona, memories })
-    });
-  }catch(e){ /* 静默失败，不影响主要功能 */ }
 }
 
 async function checkNotifyStatus(){
@@ -639,8 +658,7 @@ async function enableNotify(){
     alert('这个浏览器/系统版本不支持推送通知（iOS 需要 16.4 及以上，并且是从主屏幕图标打开的"小手机"，不是 Safari 标签页里打开的）');
     return;
   }
-  // iOS 第一次加载 Service Worker 时，页面本身还没被它"接管"，这时候调用推送相关的 API 会报错
-  // 这种情况下刷新一次页面就好了
+  // iOS 第一次加载 Service Worker 时页面还没被它接管，刷新一次就好
   if(!navigator.serviceWorker.controller){
     notifyStatus.textContent = '第一次需要刷新一下，马上自动刷新…';
     location.reload();
@@ -653,10 +671,7 @@ async function enableNotify(){
       return;
     }
     if(!swRegistration) swRegistration = await navigator.serviceWorker.ready;
-
-    const keyRes = await fetch(backendUrl.replace(/\/$/, '') + '/vapid-public-key');
-    const { publicKey } = await keyRes.json();
-
+    const { publicKey } = await api('/vapid-public-key');
     let sub = await swRegistration.pushManager.getSubscription();
     if(!sub){
       sub = await swRegistration.pushManager.subscribe({
@@ -664,13 +679,7 @@ async function enableNotify(){
         applicationServerKey: urlBase64ToUint8Array(publicKey)
       });
     }
-
-    await fetch(backendUrl.replace(/\/$/, '') + '/subscribe', {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: sub, persona, memories })
-    });
-
+    await api('/subscribe', { method: 'POST', body: { subscription: sub } });
     notifyStatus.textContent = '已开启 ✅';
   }catch(e){
     notifyStatus.textContent = '开启失败：' + e.message;
@@ -678,43 +687,47 @@ async function enableNotify(){
 }
 enableNotifyBtn.addEventListener('click', enableNotify);
 
-async function checkPendingMessages(){
-  if(!backendUrl) return;
-  try{
-    const res = await fetch(backendUrl.replace(/\/$/, '') + '/pending-messages');
-    const data = await res.json();
-    const pending = (data && data.messages) || [];
-    if(pending.length === 0) return;
-    pending.forEach(msg => {
-      addBubble(chatEl, 'assistant', msg.text);
-      history.push({role:'assistant', content: msg.text, ts: msg.sentAt || Date.now()});
-    });
-    save.history();
-    await fetch(backendUrl.replace(/\/$/, '') + '/ack-messages', { method: "POST" });
-  }catch(e){ /* 静默失败 */ }
-}
-
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').then(reg => { swRegistration = reg; checkNotifyStatus(); }).catch(()=>{});
 }
 
+/* ---------- 第一次升级到 v2：把手机里的旧聊天记录和记忆搬去后端 ---------- */
+function legacyText(m){
+  if(m.displayText !== undefined) return m.displayText;
+  if(Array.isArray(m.content)) return m.content.filter(c => c.type === 'text').map(c => c.text).join(' ');
+  return m.content || '';
+}
+async function migrateLegacyIfNeeded(){
+  if(localStorage.getItem('mp_migrated_v2')) return;
+  const legacy = JSON.parse(localStorage.getItem('mp_history') || '[]');
+  if(!legacy.length){ localStorage.setItem('mp_migrated_v2', '1'); return; }
+  let lastTs = 0;
+  const items = legacy.map(m => {
+    const ts = Math.max(Number(m.ts) || 0, lastTs + 1); lastTs = ts;
+    if(m.displayImage) thumbs[ts] = m.displayImage;
+    return { role: m.role, text: legacyText(m), hadImage: !!m.displayImage, ts };
+  });
+  await api('/import', { method: 'POST', body: { history: items, memories }, timeout: 90000 });
+  save.thumbs();
+  localStorage.setItem('mp_migrated_v2', '1');
+}
+
 /* ---------- 初始化 ---------- */
-function init(){
+async function init(){
   renderPersona();
   backendInput.value = backendUrl;
-  loadPersonaFromBackend();
-
-  if(history.length === 0){
-    addBubble(chatEl, 'assistant', '嗨，是我。今天过得怎么样？');
-  } else {
-    history.forEach(m => addBubble(chatEl, m.role, m.displayText !== undefined ? m.displayText : m.content, m.displayImage));
-  }
-  if(!backendUrl){
-    addBubble(chatEl, 'assistant', '（先去"设置"填一下后端地址，才能真正聊起来哦）');
-  }
+  renderChat();
   renderMoments();
   renderMemoryList();
-  checkPendingMessages();
+  if(!backendUrl){
+    addNote('先去"设置"填一下后端地址，才能真正聊起来');
+    return;
+  }
+  loadPersonaFromBackend();
+  try{ await migrateLegacyIfNeeded(); }
+  catch(e){ addNote('旧聊天记录还没搬过去（' + e.message + '），下次打开会再试'); }
+  await syncMessages();
+  loadMemories();
 }
 init();
 </script>
