@@ -60,8 +60,9 @@
 ## 前端架构要点（index.html）
 
 - 微信风格三个 Tab：**动态**（我发日记，Alis 详细评论）／**信息**（聊天）／**设置**（后端地址、通知、记忆管理、日记备份）
-- 聊天记录和记忆的"正本"在后端，手机 localStorage 只存副本：`mp_history_v2`、`mp_thumbs`（图片缩略图）、`mp_moments`（日记，**只存在手机上**）、`mp_memories`、`mp_persona`、`mp_backend`
-- 前端轮询 `/messages?after=` 拉新消息（他在线时 4 秒一次，不在线 15 秒一次）
+- 「信息」先是联系人列表（`CONTACT_INFO` / `CONTACT_ORDER`，头像照片在 `avatars/`），点进去才是聊天；后端 `/contacts` 里没登记的人显示成灰色、点不进去。列表显示最后一条消息、时间和未读数，底部「信息」有未读小圆点
+- 聊天记录和记忆的"正本"在后端，手机 localStorage 只存副本：`mp_history_v2`（Alistair 的聊天记录，名字沿用旧的）、`mp_history_<联系人id>`（朋友们的）、`mp_read`（每个对话看到哪条了，算未读用）、`mp_contacts`（后端登记的联系人）、`mp_thumbs`（图片缩略图）、`mp_moments`（日记，**只存在手机上**）、`mp_memories`、`mp_persona`、`mp_backend`
+- 前端轮询 `/messages?conv=&after=` 拉每个能聊的对话的新消息（正在聊的人在线时 4 秒一次，其他 15 秒一次）
 - 长按气泡（电脑上右键）弹出「引用 / 复制」菜单；引用的原文显示在气泡下方的灰色小框里，点一下会跳回原消息
 - 日记评论走 `/chat`，是即时回复，不走延迟机制
 - 设计风格：暗色、夜晚、暖色灯光的安静氛围（CSS 变量在 `:root`）。新界面要保持这个氛围
