@@ -41,11 +41,11 @@
 ## 后端架构要点（server.js）
 
 - **数据**：整个状态存在 Upstash Redis 的一个 key `miniphone:state` 里，启动时读进内存，改动后 `saveState()` 写回。结构是 `{ subscription, memories, convs: { alistair: {...}, ... } }`：推送订阅和关于我的记忆大家共用；聊天记录、待回复闹钟、在线时间、主动消息计数每个对话（`convs` 里的一项）各一份。每个对话聊天记录最多保留 500 条。
-- **联系人**：`CONTACTS` 里登记每个联系人（名字、人设、每天最多主动找我几次），id 就是对话的 id。接口用 `conv` 参数（query 或 body）指定对话，不写就是 `alistair`，所以旧版前端照样能用。`/contacts` 返回联系人列表。
+- **联系人**：`CONTACTS` 里登记每个联系人（名字、人设、在哪、每天最多主动找我几次、多久主动一次），id 就是对话的 id。现在有 `alistair`（恋人，`partner: true`）和四个朋友 `tom`、`ollie`、`nell`、`paddy`，朋友每人每天最多主动找我 1 次。接口用 `conv` 参数（query 或 body）指定对话，不写就是 `alistair`，所以旧版前端照样能用。`/contacts` 返回联系人列表。
 - **数据升级备份**：从"只有 Alistair"升级到多对话格式时，旧数据原样备份在 `miniphone:state:backup-before-convs`（只写一次，不会被覆盖），备份写不进去就拒绝升级。
-- **人设**：`PERSONA_SYSTEM` 是 Alistair 人设的唯一数据源，前端通过 `/persona` 读取。**人设文字是我精心写的，不经我同意不要改动。**
-- **作息**：全部按英国时间（`Europe/London`）。睡觉 23:30–7:00，工作日 9:00–18:00 上班，周二、四去修复现场。我在日本横滨（`Asia/Tokyo`）。`timeContext()` 把两地时间算好交给模型。
-- **课表**：我的课表在 `TIMETABLE`（日本时间），我对各门课的感觉在 `COURSE_NOTES`，学期最后一天是 `SEMESTER_END`。`jesClassStatus()` 算出我此刻在上什么课/刚下课/接下来的课，写进 `timeContext()`；聊天记录里我在上课时发的消息会标注当时在上哪门课。换学期时改这三个常量。
+- **人设**：`PERSONA_SYSTEM` 是 Alistair 人设的唯一数据源，前端通过 `/persona` 读取。朋友们的人设是 `TOM_PERSONA` 等，都由自己的部分加上共用的 `FRIEND_SHARED` 组成（朋友们叫我 Jessie，对我友好但绝不暧昧）。**人设文字是我精心写的，不经我同意不要改动。**
+- **作息**：全部按英国时间（`Europe/London`），每个人一份，在 `SCHEDULES`（睡觉、上班时间、回消息快慢 `speed`、每个时段在干嘛的 `xxxLife()`）。Alistair：睡觉 23:30–7:00，工作日 9:00–18:00 上班，周二、四去修复现场。我在日本横滨（`Asia/Tokyo`）。`timeContext(cid)` 把两地时间算好交给模型。
+- **课表**：我的课表在 `TIMETABLE`（日本时间），我对各门课的感觉在 `COURSE_NOTES`，学期最后一天是 `SEMESTER_END`。`jesClassStatus()` 算出我此刻在上什么课/刚下课/接下来的课，写进 `timeContext()`；完整课表只告诉 Alistair，朋友们只知道我此刻在不在上课；聊天记录里我在上课时发的消息会标注当时在上哪门课。换学期时改这三个常量。
 - **回复机制**：我发消息（`/send`）只是进队列，后端 `tick()` 每 10 秒检查一次：
   - `scheduleReply()` 按他当时在干嘛决定多久后回（上班慢、下班快、睡着了等醒来）
   - 回复后有一段"在线"时间（`onlineUntil`），在线时我再发消息他会很快接着回
