@@ -40,7 +40,9 @@
 
 ## 后端架构要点（server.js）
 
-- **数据**：整个状态存在 Upstash Redis 的一个 key `miniphone:state` 里（聊天记录、记忆、推送订阅、待回复闹钟等），启动时读进内存，改动后 `saveState()` 写回。聊天记录最多保留 500 条。
+- **数据**：整个状态存在 Upstash Redis 的一个 key `miniphone:state` 里，启动时读进内存，改动后 `saveState()` 写回。结构是 `{ subscription, memories, convs: { alistair: {...}, ... } }`：推送订阅和关于我的记忆大家共用；聊天记录、待回复闹钟、在线时间、主动消息计数每个对话（`convs` 里的一项）各一份。每个对话聊天记录最多保留 500 条。
+- **联系人**：`CONTACTS` 里登记每个联系人（名字、人设、每天最多主动找我几次），id 就是对话的 id。接口用 `conv` 参数（query 或 body）指定对话，不写就是 `alistair`，所以旧版前端照样能用。`/contacts` 返回联系人列表。
+- **数据升级备份**：从"只有 Alistair"升级到多对话格式时，旧数据原样备份在 `miniphone:state:backup-before-convs`（只写一次，不会被覆盖），备份写不进去就拒绝升级。
 - **人设**：`PERSONA_SYSTEM` 是 Alistair 人设的唯一数据源，前端通过 `/persona` 读取。**人设文字是我精心写的，不经我同意不要改动。**
 - **作息**：全部按英国时间（`Europe/London`）。睡觉 23:30–7:00，工作日 9:00–18:00 上班，周二、四去修复现场。我在日本横滨（`Asia/Tokyo`）。`timeContext()` 把两地时间算好交给模型。
 - **课表**：我的课表在 `TIMETABLE`（日本时间），我对各门课的感觉在 `COURSE_NOTES`，学期最后一天是 `SEMESTER_END`。`jesClassStatus()` 算出我此刻在上什么课/刚下课/接下来的课，写进 `timeContext()`；聊天记录里我在上课时发的消息会标注当时在上哪门课。换学期时改这三个常量。
@@ -66,7 +68,7 @@
 
 ## 设计决定（已经定下来的，不用再讨论）
 
-- 只有 Alistair 一个角色，不做多角色/多人设
+- ~~只有 Alistair 一个角色~~ → 已改：会加入 Alistair 的四位朋友（Tom、Paddy、Ollie、Nell），之后还可能做群聊。每个联系人一个独立对话，关于我的长期记忆共用
 - 回复要像真人：不秒回、可以只回一部分、可以分多条
 - App 开着的时候也一样要等，不因为我在看就立刻回
 
