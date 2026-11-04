@@ -78,6 +78,29 @@
   .bubble img{ max-width:100%; border-radius:10px; display:block; margin-top:6px; }
   .bubble img:first-child{ margin-top:0; }
 
+  /* 引用：长按气泡弹出菜单，引用的原文显示在气泡下面的灰色小框里（像微信） */
+  .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  .bubble.flash{ box-shadow: 0 0 0 2px var(--lamp) !important; transition: box-shadow .3s; }
+  .row.has-quote{ flex-direction:column; align-items:flex-start; gap:4px; }
+  .row.me.has-quote{ align-items:flex-end; }
+  .quote{
+    max-width:76%; font-size:11.5px; line-height:1.5; color: var(--ink-dim);
+    background: rgba(255,255,255,.05); border-radius:8px; padding:5px 9px; cursor:pointer;
+    overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word;
+  }
+  .msg-menu{
+    position:fixed; z-index:50; display:flex; gap:2px; padding:4px;
+    background:#2A2E42; border:1px solid var(--card-line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  .msg-menu button{ background:transparent; border:none; color: var(--ink); font-size:13px; font-family:inherit; padding:7px 14px; border-radius:7px; cursor:pointer; }
+  .msg-menu button:active{ background: rgba(255,255,255,.08); }
+  .reply-bar{ display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--card-line); }
+  .reply-bar .reply-text{ flex:1; min-width:0; font-size:12px; color: var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .reply-bar button{
+    background:transparent; border:1px solid rgba(255,255,255,.14); color: var(--ink-dim);
+    border-radius:8px; width:22px; height:22px; font-size:12px; cursor:pointer; flex-shrink:0;
+  }
+
   /* 消息出现的轻微动效 */
   .row{ animation: bubbleIn .28s ease; }
   @keyframes bubbleIn{ from{ opacity:0; transform: translateY(8px) scale(.97); } to{ opacity:1; transform: translateY(0) scale(1); } }
@@ -188,6 +211,10 @@
           </div>
         </div>
         <div class="chat" id="chat"></div>
+        <div class="reply-bar" id="replyBar" style="display:none;">
+          <span class="reply-text" id="replyText"></span>
+          <button id="cancelReplyBtn">×</button>
+        </div>
         <div class="image-preview-bar" id="imagePreviewBar" style="display:none;">
           <img id="imagePreviewThumb" alt="预览">
           <span style="flex:1; font-size:12px; color:var(--ink-dim);">已选好一张图片</span>
@@ -389,11 +416,12 @@ function updateStatus(status){
   if(status.online) liveUntil = Date.now() + 3 * 60 * 1000;
 }
 
-function addBubble(container, role, text, imageDataUrl){
+function addBubble(container, role, text, imageDataUrl, opts = {}){
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'ai');
   const b = document.createElement('div');
   b.className = 'bubble';
+  if(opts.id) b.dataset.id = opts.id;
   if(imageDataUrl){
     const img = document.createElement('img');
     img.src = imageDataUrl;
@@ -405,10 +433,110 @@ function addBubble(container, role, text, imageDataUrl){
     b.appendChild(span);
   }
   row.appendChild(b);
+  if(opts.replyTo){
+    row.classList.add('has-quote');
+    const q = document.createElement('div');
+    q.className = 'quote';
+    q.textContent = snippetOf(findMsg(opts.replyTo));
+    q.addEventListener('click', () => jumpToMessage(opts.replyTo));
+    row.appendChild(q);
+  }
   container.appendChild(row);
   container.scrollTop = container.scrollHeight;
   return b;
 }
+
+/* ---------- 引用 ---------- */
+const replyBar = document.getElementById('replyBar');
+const replyTextEl = document.getElementById('replyText');
+const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+let replyingTo = null; // 正在引用的那条消息的 id
+
+function findMsg(id){ return localHistory.find(m => m.id === id); }
+function snippetOf(m){
+  if(!m) return '原消息已经不在了';
+  const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
+  return (m.role === 'user' ? '我' : persona.name) + '：' + t;
+}
+
+// 点一下引用框，跳回原来那条消息，让它亮一下
+function jumpToMessage(id){
+  const el = [...chatEl.querySelectorAll('.bubble')].find(x => x.dataset.id === id);
+  if(!el) return;
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1200);
+}
+
+function startReply(m){
+  replyingTo = m.id;
+  replyTextEl.textContent = '引用 ' + snippetOf(m);
+  replyBar.style.display = 'flex';
+  input.focus();
+}
+function cancelReply(){
+  replyingTo = null;
+  replyBar.style.display = 'none';
+}
+cancelReplyBtn.addEventListener('click', cancelReply);
+
+// 长按气泡弹出小菜单：引用 / 复制
+let menuEl = null, menuOpenedAt = 0;
+function closeMsgMenu(){ if(menuEl){ menuEl.remove(); menuEl = null; } }
+function openMsgMenu(b){
+  closeMsgMenu();
+  const m = findMsg(b.dataset.id);
+  if(!m) return;
+  menuEl = document.createElement('div');
+  menuEl.className = 'msg-menu';
+  const addItem = (label, fn) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); closeMsgMenu(); fn(); });
+    menuEl.appendChild(btn);
+  };
+  addItem('引用', () => startReply(m));
+  if(m.text) addItem('复制', () => { if(navigator.clipboard) navigator.clipboard.writeText(m.text).catch(() => {}); });
+  document.body.appendChild(menuEl);
+  // 菜单放在气泡上方，上面放不下就放下方
+  const r = b.getBoundingClientRect(), mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
+  let top = r.top - mh - 6;
+  if(top < 8) top = r.bottom + 6;
+  const left = Math.max(8, Math.min(r.left + r.width / 2 - mw / 2, window.innerWidth - mw - 8));
+  menuEl.style.top = top + 'px';
+  menuEl.style.left = left + 'px';
+  menuOpenedAt = Date.now();
+}
+
+let pressTimer = null, pressStart = null, pressOpened = false;
+const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+chatEl.addEventListener('touchstart', (e) => {
+  const b = e.target.closest('.bubble');
+  if(!b || !b.dataset.id) return;
+  const t = e.touches[0];
+  pressStart = { x: t.clientX, y: t.clientY };
+  pressOpened = false;
+  pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; openMsgMenu(b); }, 450);
+}, { passive: true });
+// 长按弹出菜单后松手：拦下松手带出来的那次"点击"，不然按得久一点菜单会刚弹出就被关掉
+chatEl.addEventListener('touchend', (e) => { if(pressOpened){ e.preventDefault(); pressOpened = false; } });
+chatEl.addEventListener('touchmove', (e) => {
+  if(!pressTimer) return;
+  const t = e.touches[0];
+  if(Math.abs(t.clientX - pressStart.x) > 10 || Math.abs(t.clientY - pressStart.y) > 10) cancelPress(); // 手指动了就是在滑，不算长按
+}, { passive: true });
+chatEl.addEventListener('touchend', cancelPress);
+chatEl.addEventListener('touchcancel', cancelPress);
+// 电脑上用右键
+chatEl.addEventListener('contextmenu', (e) => {
+  const b = e.target.closest('.bubble');
+  if(!b || !b.dataset.id) return;
+  e.preventDefault();
+  openMsgMenu(b);
+});
+// 点别处或者滚动就收起菜单（刚弹出来的那一下松手不算）
+document.addEventListener('click', () => { if(menuEl && Date.now() - menuOpenedAt > 400) closeMsgMenu(); });
+chatEl.addEventListener('scroll', () => { if(Date.now() - menuOpenedAt > 400) closeMsgMenu(); });
 
 function addNote(text){
   const row = document.createElement('div');
@@ -450,7 +578,7 @@ function bubbleForMessage(m){
   maybeTimeDivider(m.ts);
   const thumb = thumbs[m.ts];
   const text = m.text || (m.hadImage && !thumb ? '[图片]' : '');
-  addBubble(chatEl, m.role, text, thumb);
+  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo });
 }
 
 function renderChat(){
@@ -492,18 +620,21 @@ async function sendChat(){
   const image = selectedImage;
   if(!text && !image) return;
   if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
+  const replyTo = replyingTo;
   input.value = '';
   selectedImage = null;
   imagePreviewBar.style.display = 'none';
+  cancelReply();
   sendBtn.disabled = true;
   sending = true;
 
   if(emptyNote){ emptyNote.remove(); emptyNote = null; }
   maybeTimeDivider(Date.now());
-  addBubble(chatEl, 'user', text, image ? image.thumb : null);
+  const bubble = addBubble(chatEl, 'user', text, image ? image.thumb : null, { replyTo });
   try{
-    const data = await api('/send', { method: 'POST', body: { text, image: image ? image.full : null }, timeout: 90000 });
+    const data = await api('/send', { method: 'POST', body: { text, image: image ? image.full : null, replyTo }, timeout: 90000 });
     const m = data.message;
+    bubble.dataset.id = m.id; // 发出去拿到编号以后，这条也能被长按引用了
     localHistory.push(m);
     save.history();
     if(image){ thumbs[m.ts] = image.thumb; save.thumbs(); }
