@@ -74,6 +74,7 @@
   .row.me .bubble{ background: var(--bubble-me); color: var(--ink); border-top-right-radius:4px; }
   .bubble.typing{ color: var(--ink-dim); font-style: italic; }
   .note{ align-self:center; font-size:11.5px; color: var(--ink-dim); padding:4px 10px; text-align:center; }
+  .note.time-note{ font-size:11px; opacity:.7; padding:2px 10px; letter-spacing:.3px; }
   .bubble img{ max-width:100%; border-radius:10px; display:block; margin-top:6px; }
   .bubble img:first-child{ margin-top:0; }
 
@@ -418,7 +419,35 @@ function addNote(text){
   return row;
 }
 
+// ---- 消息时间：像微信一样，隔了 5 分钟以上才插一行时间（用手机本地时间） ----
+const TIME_GAP = 5 * 60 * 1000;
+const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+let lastShownTs = 0; // 上一条显示出来的消息的时间
+
+function formatMsgTime(ts){
+  const d = new Date(ts), now = new Date();
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const DAY = 24 * 60 * 60 * 1000;
+  if(ts >= startOfToday) return hm;
+  if(ts >= startOfToday - DAY) return '昨天 ' + hm;
+  if(ts >= startOfToday - 6 * DAY) return WEEKDAY_NAMES[d.getDay()] + ' ' + hm;
+  const md = (d.getMonth() + 1) + '月' + d.getDate() + '日 ';
+  if(d.getFullYear() === now.getFullYear()) return md + hm;
+  return d.getFullYear() + '年' + md + hm;
+}
+
+function maybeTimeDivider(ts){
+  if(!ts) return;
+  if(ts - lastShownTs >= TIME_GAP){
+    const note = addNote(formatMsgTime(ts));
+    note.classList.add('time-note');
+  }
+  lastShownTs = ts;
+}
+
 function bubbleForMessage(m){
+  maybeTimeDivider(m.ts);
   const thumb = thumbs[m.ts];
   const text = m.text || (m.hadImage && !thumb ? '[图片]' : '');
   addBubble(chatEl, m.role, text, thumb);
@@ -426,6 +455,7 @@ function bubbleForMessage(m){
 
 function renderChat(){
   chatEl.innerHTML = '';
+  lastShownTs = 0;
   if(localHistory.length === 0){
     emptyNote = addNote('还没有消息，跟他说点什么吧');
   }
@@ -469,6 +499,7 @@ async function sendChat(){
   sending = true;
 
   if(emptyNote){ emptyNote.remove(); emptyNote = null; }
+  maybeTimeDivider(Date.now());
   addBubble(chatEl, 'user', text, image ? image.thumb : null);
   try{
     const data = await api('/send', { method: 'POST', body: { text, image: image ? image.full : null }, timeout: 90000 });
