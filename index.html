@@ -319,7 +319,7 @@ let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { name
 // 联系人：头像照片在 avatars/ 文件夹。后端 /contacts 里登记了的人才能聊天，其他人先在列表里显示成灰色
 const CONTACT_INFO = {
   alistair: { name: 'Alistair', avatar: 'avatars/alistair.jpg' },
-  crew:     { name: '工地上的老伙计们', group: true, members: ['alistair', 'tom', 'ollie', 'nell', 'paddy'] },
+  crew:     { name: '工地上的老伙计们', avatar: 'avatars/crew.jpg', group: true, members: ['alistair', 'tom', 'ollie', 'nell', 'paddy'] },
   tom:      { name: 'Tom',      avatar: 'avatars/tom.jpg' },
   ollie:    { name: 'Ollie',    avatar: 'avatars/ollie.jpg' },
   nell:     { name: 'Nell',     avatar: 'avatars/nell.jpg' },
@@ -544,10 +544,10 @@ function listTime(ts){
   if(ts >= startOfToday - 6 * DAY) return WEEKDAY_NAMES[d.getDay()];
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
-// 头像：单人是照片，群是五个人的小照片拼起来
+// 头像：有照片就用照片（群也有一张合照）；群万一没有照片，就把五个人的小照片拼起来
 function avatarFor(cid, size){
   const info = CONTACT_INFO[cid];
-  if(!info.group){
+  if(info.avatar){
     const img = document.createElement('img');
     img.src = info.avatar; img.alt = '';
     img.style.width = img.style.height = size + 'px';
