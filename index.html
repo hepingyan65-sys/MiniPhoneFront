@@ -85,6 +85,20 @@
   .row.with-speaker .col .bubble{ max-width:100%; }
   .row.with-speaker .col .quote{ max-width:100%; }
   .speaker-name{ font-size:10.5px; color: var(--ink-dim); padding-left:2px; }
+  .row.with-speaker .mini-av{ cursor:pointer; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+
+  /* 资料页：群里短按头像打开 */
+  .profile{ position:absolute; inset:0; z-index:40; display:none; flex-direction:column;
+    background: radial-gradient(420px 300px at 50% 18%, rgba(227,161,92,.16), transparent 65%), linear-gradient(180deg, var(--sky-top), var(--sky-bottom)); }
+  .profile.open{ display:flex; }
+  .profile .p-body{ flex:1; display:flex; flex-direction:column; align-items:center; padding: 28px 28px 20px; gap:6px; text-align:center; }
+  .profile .p-av{ width:96px; height:96px; border-radius:50%; object-fit:cover; background:#2A2E42; box-shadow: 0 0 26px 4px rgba(227,161,92,.3); margin-bottom:10px; }
+  .profile .p-name{ font-family:"Noto Serif SC", serif; font-size:20px; color: var(--ink); }
+  .profile .p-full{ font-size:12px; color: var(--ink-dim); letter-spacing:.3px; }
+  .profile .p-role{ font-size:13px; color: var(--ink); margin-top:14px; line-height:1.7; }
+  .profile .p-now{ font-size:12px; color: var(--lamp); margin-top:6px; }
+  .profile .p-btn{ margin-top:auto; width:100%; padding:12px; border-radius:12px; border:1px solid rgba(227,161,92,.35); background: rgba(227,161,92,.12); color: var(--ink); font-size:14px; font-family:inherit; cursor:pointer; }
+  .profile .p-btn:disabled{ opacity:.4; }
   .tab-dot{ position:absolute; top:6px; left:calc(50% + 8px); width:8px; height:8px; border-radius:50%; background: var(--lamp); display:none; }
 
   .who{flex:1; min-width:0;}
@@ -239,6 +253,21 @@
         <div class="header"><div class="plain-title">信息</div></div>
         <div class="contacts-list" id="contactsList"></div>
        </div>
+       <!-- 资料页（群里短按头像） -->
+       <div class="profile" id="profileView">
+        <div class="header">
+          <button class="back-btn" id="profileBackBtn" aria-label="返回">‹</button>
+          <div class="who"><div class="name">资料</div></div>
+        </div>
+        <div class="p-body">
+          <img class="p-av" id="profileAv" alt="">
+          <div class="p-name" id="profileName"></div>
+          <div class="p-full" id="profileFull"></div>
+          <div class="p-role" id="profileRole"></div>
+          <div class="p-now" id="profileNow"></div>
+          <button class="p-btn" id="profileChatBtn">发消息</button>
+        </div>
+       </div>
        <!-- 和某个人的聊天 -->
        <div id="convView" style="display:none; flex-direction:column; flex:1; min-height:0;">
         <div class="header">
@@ -318,12 +347,12 @@ let backendUrl = localStorage.getItem('mp_backend') || '';
 let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { name: "Alistair", system: "" };
 // 联系人：头像照片在 avatars/ 文件夹。后端 /contacts 里登记了的人才能聊天，其他人先在列表里显示成灰色
 const CONTACT_INFO = {
-  alistair: { name: 'Alistair', avatar: 'avatars/alistair.jpg' },
+  alistair: { name: 'Alistair', avatar: 'avatars/alistair.jpg', full: 'Alistair Whitmore', role: '古建筑修复事务所', where: '伦敦' },
   crew:     { name: '工地上的老伙计们', avatar: 'avatars/crew.jpg', group: true, members: ['alistair', 'tom', 'ollie', 'nell', 'paddy'] },
-  tom:      { name: 'Tom',      avatar: 'avatars/tom.jpg' },
-  ollie:    { name: 'Ollie',    avatar: 'avatars/ollie.jpg' },
-  nell:     { name: 'Nell',     avatar: 'avatars/nell.jpg' },
-  paddy:    { name: 'Paddy',    avatar: 'avatars/paddy.jpg' },
+  tom:      { name: 'Tom',      avatar: 'avatars/tom.jpg',   full: 'Thomas Bennett',   role: '结构工程师', where: '伦敦' },
+  ollie:    { name: 'Ollie',    avatar: 'avatars/ollie.jpg', full: 'Oliver Hayes',     role: '建筑师 · 柯基 Milo 的主人', where: '伦敦' },
+  nell:     { name: 'Nell',     avatar: 'avatars/nell.jpg',  full: 'Eleanor Price',    role: '项目经理', where: '伦敦' },
+  paddy:    { name: 'Paddy',    avatar: 'avatars/paddy.jpg', full: 'Patrick O\'Connell', role: '石匠大师', where: '英国乡下' },
 };
 const CONTACT_ORDER = ['alistair', 'crew', 'tom', 'ollie', 'nell', 'paddy'];
 const isGroup = (cid) => !!(CONTACT_INFO[cid] && CONTACT_INFO[cid].group);
@@ -658,6 +687,7 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     const av = document.createElement('img');
     av.className = 'mini-av'; av.alt = '';
     av.src = (CONTACT_INFO[opts.speaker] || {}).avatar || '';
+    av.dataset.speaker = opts.speaker;
     const col = document.createElement('div'); col.className = 'col';
     const nm = document.createElement('div'); nm.className = 'speaker-name'; nm.textContent = speakerName(opts.speaker);
     col.appendChild(nm);
@@ -743,6 +773,15 @@ function openMsgMenu(b){
 let pressTimer = null, pressStart = null, pressOpened = false;
 const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
 chatEl.addEventListener('touchstart', (e) => {
+  // 群里长按头像：@ 他
+  const av = e.target.closest('.mini-av');
+  if(av && av.dataset.speaker){
+    const t = e.touches[0];
+    pressStart = { x: t.clientX, y: t.clientY };
+    pressOpened = false;
+    pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; insertMention(av.dataset.speaker); }, 450);
+    return;
+  }
   const b = e.target.closest('.bubble');
   if(!b || !b.dataset.id) return;
   const t = e.touches[0];
@@ -759,8 +798,15 @@ chatEl.addEventListener('touchmove', (e) => {
 }, { passive: true });
 chatEl.addEventListener('touchend', cancelPress);
 chatEl.addEventListener('touchcancel', cancelPress);
-// 电脑上用右键
+// 群里短按头像：打开他的资料页（长按松手带出来的那次点击，上面已经拦掉了）
+chatEl.addEventListener('click', (e) => {
+  const av = e.target.closest('.mini-av');
+  if(av && av.dataset.speaker) openProfile(av.dataset.speaker);
+});
+// 电脑上用右键（右键头像 = @ 他）
 chatEl.addEventListener('contextmenu', (e) => {
+  const av = e.target.closest('.mini-av');
+  if(av && av.dataset.speaker){ e.preventDefault(); insertMention(av.dataset.speaker); return; }
   const b = e.target.closest('.bubble');
   if(!b || !b.dataset.id) return;
   e.preventDefault();
@@ -769,6 +815,53 @@ chatEl.addEventListener('contextmenu', (e) => {
 // 点别处或者滚动就收起菜单（刚弹出来的那一下松手不算）
 document.addEventListener('click', () => { if(menuEl && Date.now() - menuOpenedAt > 400) closeMsgMenu(); });
 chatEl.addEventListener('scroll', () => { if(Date.now() - menuOpenedAt > 400) closeMsgMenu(); });
+
+/* ---------- @ 和资料页 ---------- */
+// 在输入框光标处插入「@名字 」
+function insertMention(cid){
+  const tag = '@' + contactName(cid) + ' ';
+  const pos = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+  const before = input.value.slice(0, pos);
+  const pad = before && !/\s$/.test(before) ? ' ' : ''; // 前面紧挨着字的话，先空一格
+  input.value = before + pad + tag + input.value.slice(pos);
+  const caret = pos + pad.length + tag.length;
+  input.focus();
+  input.setSelectionRange(caret, caret);
+  if(navigator.vibrate) navigator.vibrate(15);
+}
+
+const profileView = document.getElementById('profileView');
+let profileOf = null;
+async function openProfile(cid){
+  const info = CONTACT_INFO[cid];
+  if(!info || info.group) return;
+  closeMsgMenu();
+  profileOf = cid;
+  document.getElementById('profileAv').src = info.avatar || '';
+  document.getElementById('profileName').textContent = contactName(cid);
+  document.getElementById('profileFull').textContent = info.full || '';
+  document.getElementById('profileRole').textContent = info.role || '';
+  const nowEl = document.getElementById('profileNow');
+  nowEl.textContent = (info.where || '') + ' · …';
+  const btn = document.getElementById('profileChatBtn');
+  btn.disabled = !backendContacts[cid];
+  btn.textContent = backendContacts[cid] ? '发消息' : '还不能聊天';
+  profileView.classList.add('open');
+  // 问后端他那边几点、大概在干嘛（after 写得很大，只要状态，不要消息）
+  try{
+    const data = await api('/messages?conv=' + encodeURIComponent(cid) + '&after=9999999999999', { timeout: 15000 });
+    const st = data && data.status;
+    if(st && profileOf === cid) nowEl.textContent = (info.where || '') + ' ' + st.time + ' · ' + (ACTIVITY_LABEL[st.activity] || '');
+  }catch(e){ if(profileOf === cid) nowEl.textContent = info.where || ''; }
+}
+function closeProfile(){ profileOf = null; profileView.classList.remove('open'); }
+document.getElementById('profileBackBtn').addEventListener('click', closeProfile);
+document.getElementById('profileChatBtn').addEventListener('click', () => {
+  const cid = profileOf;
+  if(!cid || !backendContacts[cid]) return;
+  closeProfile();
+  openConv(cid);
+});
 
 function addNote(text){
   const row = document.createElement('div');
