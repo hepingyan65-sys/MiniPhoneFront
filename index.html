@@ -569,7 +569,7 @@ const speakerName = (id) => (CONTACT_INFO[id] ? contactName(id) : '某人');
 function previewOf(cid, m){
   const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
   if(m.role === 'user') return '我：' + t;
-  return (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '') + t;
+  return (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '') + cleanStamps(t).replace(/\s+/g, ' ');
 }
 
 function renderContacts(){
@@ -806,10 +806,12 @@ function maybeTimeDivider(ts){
   lastShownTs = ts;
 }
 
+// 以前有几条消息里夹着后端的时间标记（"[你那边 11月5日 …]"），手机里存的副本还留着，显示时擦掉
+const cleanStamps = (t) => String(t || '').replace(/\s*\[(?:她|你)那边[^\]]*\]\s*/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim();
 function bubbleForMessage(m){
   maybeTimeDivider(m.ts);
   const thumb = thumbs[m.ts];
-  const text = m.text || (m.hadImage && !thumb ? '[图片]' : '');
+  const text = (m.role === 'user' ? m.text : cleanStamps(m.text)) || (m.hadImage && !thumb ? '[图片]' : '');
   addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker });
 }
 
