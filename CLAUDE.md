@@ -54,6 +54,7 @@
 - **引用**：消息可以带 `replyTo`（被引用那条的 id）。我引用他的消息走 `/send` 的 `replyTo`；他只有在我连着发了 2 条以上、而他某条回复只针对其中一条时才能引用（`generateMessages()` 里的 `allowedIds`，模型输出 `{"text", "reply_to"}`，不在允许范围的编号会被忽略）。
 - **主动消息**：`maybeProactive()`，每天上限 `MAX_PROACTIVE_PER_DAY`，睡觉时不发。
 - **八卦**：我和某人聊完后，`detectGossip()` 让模型判断我这次说的话会不会传开，传的话记进 `state.gossip`，3～24 小时后其他人陆续"听说"（`reach`），听说后 3 天内会写进他们的提示词（`gossipNote()`），提起过一次就不再给（模型在 JSON 里回 `used_gossip`）。朋友那里：关于 Alistair 的事、我的大新闻、好笑劲爆的话都可能传；我让保密的，按 `GOSSIP_LEAK_CHANCE` 偶尔说漏嘴（Ollie、Paddy 嘴最快）。Alistair 那里：只炫耀我的好消息，私密的事绝不往外说。有人刚听说时，`noticeGossip()` 有一定概率让他提前来找我（每天主动次数上限照旧）。`/debug` 里能看到最近的八卦和谁什么时候听说。
+- **群聊**：「工地上的老伙计们」（对话 id `crew`，`GROUP_ID` / `GROUP_MEMBERS`）。他们自己在群里一段一段地聊（`maybeScene()`，一天最多 `MAX_SCENES_PER_DAY` 段，至少两个人醒着才聊，灵感从 `SCENE_SEEDS_*` 里随机挑），群聊用的简短人物介绍是 `GROUP_CAST`；很少（`SCENE_MENTION_JES_CHANCE`）有人提到或 @我。我在群里说话由 `doGroupReply()` 让醒着的人回。群里的消息带 `speaker`（谁说的）。模型给每条写 `wait`（离上一条几分钟，可以故意停很久制造"装死"效果），消息先排进 `outbox` 队列，`tick()` 里的 `flushGroupOutbox()` 到点再发；我在群里插话时队列清空、改成回我。只有 @Jessie 或回我的第一条才推送，我这边半夜（日本 1–8 点）@我 的不推送。私聊里的人现在还不知道群里聊了什么。
 - **记忆**：`extractMemory()` 从聊天和日记里提炼长期记忆（只记稳定的喜好/身份/状态，不记一次性琐事）。
 - **模型**：DeepSeek，常量 `MODEL`。调用时关闭了 thinking（之前出现过模型返回空内容导致一整晚不回的问题，这是修复方案）。不经我同意不要换模型。
 - **调试**：浏览器打开 `后端地址/debug` 能看到他当前状态、闹钟、未回消息数。
@@ -61,7 +62,7 @@
 ## 前端架构要点（index.html）
 
 - 微信风格三个 Tab：**动态**（我发日记，Alis 详细评论）／**信息**（聊天）／**设置**（后端地址、通知、记忆管理、日记备份）
-- 「信息」先是联系人列表（`CONTACT_INFO` / `CONTACT_ORDER`，头像照片在 `avatars/`），点进去才是聊天；后端 `/contacts` 里没登记的人显示成灰色、点不进去。列表显示最后一条消息、时间和未读数，底部「信息」有未读小圆点
+- 「信息」先是联系人列表（`CONTACT_INFO` / `CONTACT_ORDER`，头像照片在 `avatars/`），点进去才是聊天；后端 `/contacts` 里没登记的人显示成灰色、点不进去。群聊排在 Alistair 下面，头像是五个人的小照片拼起来，群里每条消息带小头像和名字；群像开了免打扰，只有 @我 的消息才会让底部「信息」亮小圆点。列表显示最后一条消息、时间和未读数，底部「信息」有未读小圆点
 - 聊天记录和记忆的"正本"在后端，手机 localStorage 只存副本：`mp_history_v2`（Alistair 的聊天记录，名字沿用旧的）、`mp_history_<联系人id>`（朋友们的）、`mp_read`（每个对话看到哪条了，算未读用）、`mp_contacts`（后端登记的联系人）、`mp_thumbs`（图片缩略图）、`mp_moments`（日记，**只存在手机上**）、`mp_memories`、`mp_persona`、`mp_backend`
 - 前端轮询 `/messages?conv=&after=` 拉每个能聊的对话的新消息（正在聊的人在线时 4 秒一次，其他 15 秒一次）
 - 长按气泡（电脑上右键）弹出「引用 / 复制」菜单；引用的原文显示在气泡下方的灰色小框里，点一下会跳回原消息

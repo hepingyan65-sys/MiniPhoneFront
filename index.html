@@ -75,6 +75,16 @@
   .contact-row.not-yet{ cursor:default; opacity:.45; }
   .contact-row.not-yet:active{ background:none; }
   .tab-btn{ position:relative; }
+  /* 群头像：五个人的小头像拼在一起（像微信群） */
+  .group-av{ display:flex; flex-wrap:wrap-reverse; justify-content:center; align-content:center; gap:1px; padding:2px; background:#2A2E42; border-radius:50%; overflow:hidden; flex-shrink:0; }
+  .group-av img{ border-radius:3px !important; object-fit:cover; background:none !important; box-shadow:none !important; }
+  /* 群聊里每条消息前面的小头像和名字 */
+  .row.with-speaker{ gap:8px; align-items:flex-start; }
+  .row.with-speaker .mini-av{ width:30px; height:30px; border-radius:50%; object-fit:cover; flex-shrink:0; margin-top:2px; }
+  .row.with-speaker .col{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; max-width:76%; min-width:0; }
+  .row.with-speaker .col .bubble{ max-width:100%; }
+  .row.with-speaker .col .quote{ max-width:100%; }
+  .speaker-name{ font-size:10.5px; color: var(--ink-dim); padding-left:2px; }
   .tab-dot{ position:absolute; top:6px; left:calc(50% + 8px); width:8px; height:8px; border-radius:50%; background: var(--lamp); display:none; }
 
   .who{flex:1; min-width:0;}
@@ -233,7 +243,7 @@
        <div id="convView" style="display:none; flex-direction:column; flex:1; min-height:0;">
         <div class="header">
           <button class="back-btn" id="backBtn" aria-label="返回">‹</button>
-          <img class="avatar" id="convAvatar" alt="">
+          <div id="convAvatarBox" style="display:flex;"></div>
           <div class="who">
             <div class="name" id="personaName"></div>
             <div class="status-line" id="statusLine">伦敦</div>
@@ -309,12 +319,15 @@ let persona = JSON.parse(localStorage.getItem('mp_persona') || 'null') || { name
 // 联系人：头像照片在 avatars/ 文件夹。后端 /contacts 里登记了的人才能聊天，其他人先在列表里显示成灰色
 const CONTACT_INFO = {
   alistair: { name: 'Alistair', avatar: 'avatars/alistair.jpg' },
+  crew:     { name: '工地上的老伙计们', group: true, members: ['alistair', 'tom', 'ollie', 'nell', 'paddy'] },
   tom:      { name: 'Tom',      avatar: 'avatars/tom.jpg' },
   ollie:    { name: 'Ollie',    avatar: 'avatars/ollie.jpg' },
   nell:     { name: 'Nell',     avatar: 'avatars/nell.jpg' },
   paddy:    { name: 'Paddy',    avatar: 'avatars/paddy.jpg' },
 };
-const CONTACT_ORDER = ['alistair', 'tom', 'ollie', 'nell', 'paddy'];
+const CONTACT_ORDER = ['alistair', 'crew', 'tom', 'ollie', 'nell', 'paddy'];
+const isGroup = (cid) => !!(CONTACT_INFO[cid] && CONTACT_INFO[cid].group);
+const mentionsMe = (text) => /@\s*Jess/i.test(text || ''); // 群里有人 @我
 let backendContacts = JSON.parse(localStorage.getItem('mp_contacts') || 'null') || { alistair: 'Alistair' }; // { id: 名字 }
 let readAt = JSON.parse(localStorage.getItem('mp_read') || '{}'); // { id: 看过的最后一条消息的时间 }，用来算未读
 let currentConv = null; // 正在看的对话；null 表示在联系人列表
@@ -428,7 +441,7 @@ const chatEl = document.getElementById('chat');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const personaNameEl = document.getElementById('personaName');
-const convAvatarEl = document.getElementById('convAvatar');
+const convAvatarBox = document.getElementById('convAvatarBox');
 const contactsView = document.getElementById('contactsView');
 const convView = document.getElementById('convView');
 const contactsListEl = document.getElementById('contactsList');
@@ -490,6 +503,10 @@ const liveUntil = {};  // 每个对话"他在线、要看得勤一点"到什么�
 function renderStatus(){
   const status = currentConv && statuses[currentConv];
   if(!status){ statusLineEl.textContent = '伦敦'; return; }
+  if(status.group){
+    statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + (status.awake ? status.awake + ' 人醒着' : '大家都睡了');
+    return;
+  }
   const label = status.online ? '在线' : (ACTIVITY_LABEL[status.activity] || '');
   statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + label;
 }
@@ -527,6 +544,34 @@ function listTime(ts){
   if(ts >= startOfToday - 6 * DAY) return WEEKDAY_NAMES[d.getDay()];
   return (d.getMonth() + 1) + '/' + d.getDate();
 }
+// 头像：单人是照片，群是五个人的小照片拼起来
+function avatarFor(cid, size){
+  const info = CONTACT_INFO[cid];
+  if(!info.group){
+    const img = document.createElement('img');
+    img.src = info.avatar; img.alt = '';
+    img.style.width = img.style.height = size + 'px';
+    return img;
+  }
+  const box = document.createElement('div');
+  box.className = 'group-av';
+  box.style.width = box.style.height = size + 'px';
+  const cell = Math.floor((size - 6) / 3);
+  info.members.forEach(m => {
+    const img = document.createElement('img');
+    img.src = CONTACT_INFO[m].avatar; img.alt = '';
+    img.style.width = img.style.height = cell + 'px';
+    box.appendChild(img);
+  });
+  return box;
+}
+const speakerName = (id) => (CONTACT_INFO[id] ? contactName(id) : '某人');
+function previewOf(cid, m){
+  const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
+  if(m.role === 'user') return '我：' + t;
+  return (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '') + t;
+}
+
 function renderContacts(){
   contactsListEl.innerHTML = '';
   let anyUnread = false;
@@ -537,8 +582,7 @@ function renderContacts(){
     const last = h[h.length - 1];
     const row = document.createElement('div');
     row.className = 'contact-row' + (ok ? '' : ' not-yet');
-    const img = document.createElement('img');
-    img.src = info.avatar; img.alt = '';
+    const img = avatarFor(cid, 48);
     const main = document.createElement('div'); main.className = 'c-main';
     const top = document.createElement('div'); top.className = 'c-top';
     const name = document.createElement('div'); name.className = 'c-name'; name.textContent = contactName(cid);
@@ -547,12 +591,13 @@ function renderContacts(){
     const bottom = document.createElement('div'); bottom.className = 'c-bottom';
     const lastEl = document.createElement('div'); lastEl.className = 'c-last';
     if(!ok) lastEl.textContent = '还在工地上忙，过几天就能聊天了';
-    else if(last) lastEl.textContent = (last.role === 'user' ? '我：' : '') + (last.text || (last.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
+    else if(last) lastEl.textContent = previewOf(cid, last);
     else lastEl.textContent = '还没有消息';
     bottom.appendChild(lastEl);
     const n = ok ? unreadCount(cid) : 0;
     if(n){
-      anyUnread = true;
+      // 群聊像开了免打扰：只有 @我 的才让底部「信息」亮小圆点
+      if(!isGroup(cid) || historyOf(cid).some(m => m.role !== 'user' && m.ts > (readAt[cid] || 0) && mentionsMe(m.text))) anyUnread = true;
       const badge = document.createElement('div'); badge.className = 'unread'; badge.textContent = n > 99 ? '99+' : n;
       bottom.appendChild(badge);
     }
@@ -568,7 +613,10 @@ function openConv(cid){
   if(currentConv !== cid){ cancelReply(); }
   currentConv = cid;
   personaNameEl.textContent = contactName(cid);
-  convAvatarEl.src = CONTACT_INFO[cid].avatar;
+  convAvatarBox.innerHTML = '';
+  const av = avatarFor(cid, 40);
+  av.classList.add('avatar');
+  convAvatarBox.appendChild(av);
   renderStatus();
   contactsView.style.display = 'none';
   convView.style.display = 'flex';
@@ -603,14 +651,27 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     span.textContent = text;
     b.appendChild(span);
   }
-  row.appendChild(b);
+  // 群聊里别人说的话：前面放小头像，上面写名字
+  let holder = row;
+  if(opts.speaker && role !== 'user'){
+    row.classList.add('with-speaker');
+    const av = document.createElement('img');
+    av.className = 'mini-av'; av.alt = '';
+    av.src = (CONTACT_INFO[opts.speaker] || {}).avatar || '';
+    const col = document.createElement('div'); col.className = 'col';
+    const nm = document.createElement('div'); nm.className = 'speaker-name'; nm.textContent = speakerName(opts.speaker);
+    col.appendChild(nm);
+    row.appendChild(av); row.appendChild(col);
+    holder = col;
+  }
+  holder.appendChild(b);
   if(opts.replyTo){
-    row.classList.add('has-quote');
+    if(holder === row) row.classList.add('has-quote');
     const q = document.createElement('div');
     q.className = 'quote';
     q.textContent = snippetOf(findMsg(opts.replyTo));
     q.addEventListener('click', () => jumpToMessage(opts.replyTo));
-    row.appendChild(q);
+    holder.appendChild(q);
   }
   container.appendChild(row);
   container.scrollTop = container.scrollHeight;
@@ -627,7 +688,7 @@ function findMsg(id){ return currentConv ? historyOf(currentConv).find(m => m.id
 function snippetOf(m){
   if(!m) return '原消息已经不在了';
   const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
-  return (m.role === 'user' ? '我' : contactName(currentConv)) + '：' + t;
+  return (m.role === 'user' ? '我' : (m.speaker ? speakerName(m.speaker) : contactName(currentConv))) + '：' + t;
 }
 
 // 点一下引用框，跳回原来那条消息，让它亮一下
@@ -749,7 +810,7 @@ function bubbleForMessage(m){
   maybeTimeDivider(m.ts);
   const thumb = thumbs[m.ts];
   const text = m.text || (m.hadImage && !thumb ? '[图片]' : '');
-  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo });
+  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker });
 }
 
 function renderChat(){
@@ -759,7 +820,7 @@ function renderChat(){
   if(!currentConv) return;
   const h = historyOf(currentConv);
   if(h.length === 0){
-    emptyNote = addNote('还没有消息，跟' + contactName(currentConv) + '说点什么吧');
+    emptyNote = addNote(isGroup(currentConv) ? '群里还没有消息，等他们聊起来吧' : '还没有消息，跟' + contactName(currentConv) + '说点什么吧');
   }
   h.forEach(bubbleForMessage);
 }
