@@ -206,6 +206,14 @@
   .post .p-time{ font-size:11px; color: var(--ink-dim); }
   .post .p-like-btn{ background:transparent; border:none; color: var(--ink-dim); font-size:15px; padding:0 4px; cursor:pointer; font-family:inherit; }
   .post .p-like-btn.on{ color: var(--lamp); }
+  .post .p-btns{ display:flex; gap:6px; }
+  .post .p-comment{ cursor:pointer; border-radius:4px; }
+  .post .p-comment:active{ background: rgba(255,255,255,.06); }
+  .feed-cbar{ display:none; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--card-line); background: rgba(10,10,16,.9); flex-shrink:0; }
+  .feed-cbar.open{ display:flex; }
+  .feed-cbar input{ flex:1; min-width:0; border-radius:16px; border:1px solid rgba(255,255,255,.12); padding:8px 12px; font-size:16px; font-family:inherit; color: var(--ink); background: rgba(255,255,255,.04); outline:none; }
+  .feed-cbar input:focus{ border-color: var(--lamp); }
+  .feed-cbar .cb-x{ background:transparent; border:none; color: var(--ink-dim); font-size:18px; cursor:pointer; padding:0 2px; }
   .post .p-react{ margin-top:7px; background: rgba(255,255,255,.04); border-radius:6px; font-size:12.5px; line-height:1.6; }
   .post .p-likes{ padding:5px 9px; color: var(--lamp); }
   .post .p-likes + .p-comments{ border-top:1px solid var(--card-line); }
@@ -268,6 +276,12 @@
             <div class="feed-actions"><button class="feed-post-btn" id="feedPostBtn">发表</button></div>
           </div>
           <div id="feedList"></div>
+        </div>
+        <!-- 评论框：点 💬 评论这条，点别人的评论就是回复他 -->
+        <div class="feed-cbar" id="feedCbar">
+          <button class="cb-x" id="feedCClose" aria-label="收起">×</button>
+          <input id="feedCInput" placeholder="评论" enterkeyhint="send">
+          <button class="send" id="feedCSend">发送</button>
         </div>
       </div>
 
@@ -1112,13 +1126,18 @@ function renderFeed(){
     const foot = document.createElement('div'); foot.className = 'p-foot';
     const time = document.createElement('div'); time.className = 'p-time'; time.textContent = feedTime(p.ts);
     foot.appendChild(time);
+    const btns = document.createElement('div'); btns.className = 'p-btns';
     if(p.author !== 'jes'){ // 给他们的朋友圈点赞
       const liked = (p.likes || []).some(l => l.who === 'jes');
       const lb = document.createElement('button'); lb.className = 'p-like-btn' + (liked ? ' on' : ''); lb.textContent = liked ? '♥' : '♡';
       lb.title = liked ? '取消赞' : '赞';
       lb.addEventListener('click', () => toggleLike(p.id, lb));
-      foot.appendChild(lb);
+      btns.appendChild(lb);
     }
+    const cb = document.createElement('button'); cb.className = 'p-like-btn'; cb.textContent = '💬'; cb.title = '评论';
+    cb.addEventListener('click', () => openCommentBar(p.id, null));
+    btns.appendChild(cb);
+    foot.appendChild(btns);
     main.appendChild(foot);
     const likes = p.likes || [], comments = p.comments || [];
     if(likes.length || comments.length){
@@ -1132,6 +1151,7 @@ function renderFeed(){
         const cs = document.createElement('div'); cs.className = 'p-comments';
         comments.forEach(c => {
           const row = document.createElement('div'); row.className = 'p-comment';
+          if(c.who !== 'jes') row.addEventListener('click', () => openCommentBar(p.id, c.who));
           const who = document.createElement('b'); who.textContent = feedName(c.who);
           row.appendChild(who);
           if(c.to){
@@ -1192,6 +1212,38 @@ async function postFeed(){
   }
 }
 feedPostBtn.addEventListener('click', postFeed);
+
+// 评论框：commentTarget = { postId, to }，to 是要回复的人（不写就是直接评论）
+const feedCbar = document.getElementById('feedCbar');
+const feedCInput = document.getElementById('feedCInput');
+const feedCSend = document.getElementById('feedCSend');
+let commentTarget = null;
+function openCommentBar(postId, to){
+  commentTarget = { postId, to };
+  feedCInput.placeholder = to ? '回复 ' + feedName(to) + '：' : '评论';
+  feedCbar.classList.add('open');
+  feedCInput.focus();
+}
+function closeCommentBar(){ commentTarget = null; feedCInput.value = ''; feedCbar.classList.remove('open'); }
+document.getElementById('feedCClose').addEventListener('click', closeCommentBar);
+async function sendComment(){
+  const text = feedCInput.value.trim();
+  if(!text || !commentTarget) return;
+  feedCSend.disabled = true;
+  try{
+    const data = await api('/feed/comment', { method: 'POST', body: { postId: commentTarget.postId, text, to: commentTarget.to || '' }, timeout: 20000 });
+    const i = feed.findIndex(x => x.id === commentTarget.postId);
+    if(i >= 0 && data.post){ feed[i] = data.post; save.feed(); }
+    closeCommentBar();
+    renderFeed();
+  }catch(e){
+    alert('没发出去（' + e.message + '），字还在框里，可以再点一次');
+  }finally{
+    feedCSend.disabled = false;
+  }
+}
+feedCSend.addEventListener('click', sendComment);
+feedCInput.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); sendComment(); } });
 
 async function toggleLike(postId, btn){
   btn.disabled = true;
