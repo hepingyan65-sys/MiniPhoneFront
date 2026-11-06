@@ -190,7 +190,6 @@
   .feed-post-btn:disabled{ opacity:.4; }
   .post{ display:flex; gap:10px; padding:14px 0; border-bottom:1px solid var(--card-line); }
   .post .p-avatar{ width:40px; height:40px; border-radius:8px; flex-shrink:0; object-fit:cover; }
-  .post .me-av{ background: radial-gradient(circle at 35% 30%, #F3C286, var(--lamp) 55%, var(--lamp-dim) 100%); color:#20140A; display:flex; align-items:center; justify-content:center; font-family:"Noto Serif SC", serif; font-size:16px; }
   .post .p-main{ flex:1; min-width:0; }
   .post .p-author{ font-size:13.5px; color: var(--lamp); font-family:"Noto Serif SC", serif; margin-bottom:3px; }
   .post .p-text{ font-size:13.5px; line-height:1.65; color: var(--ink); white-space:pre-wrap; word-break:break-word; }
@@ -1078,8 +1077,8 @@ function renderFeed(){
   [...feed].sort((a, b) => b.ts - a.ts).forEach(p => {
     const card = document.createElement('div'); card.className = 'post';
     let av;
-    if(p.author === 'jes'){ av = document.createElement('div'); av.className = 'p-avatar me-av'; av.textContent = 'J'; }
-    else { av = document.createElement('img'); av.className = 'p-avatar'; av.alt = ''; av.src = (CONTACT_INFO[p.author] || {}).avatar || ''; }
+    av = document.createElement('img'); av.className = 'p-avatar'; av.alt = '';
+    av.src = p.author === 'jes' ? 'avatars/jes.jpg' : ((CONTACT_INFO[p.author] || {}).avatar || '');
     const main = document.createElement('div'); main.className = 'p-main';
     const author = document.createElement('div'); author.className = 'p-author'; author.textContent = p.author === 'jes' ? 'Jes' : contactName(p.author);
     main.appendChild(author);
