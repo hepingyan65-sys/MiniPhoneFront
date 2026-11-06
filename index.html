@@ -176,25 +176,40 @@
   .send{ background: linear-gradient(135deg, #F0BA80, var(--lamp-dim)); color:#20140A; border:none; border-radius:16px; padding: 9px 16px; font-size:13px; font-weight:600; cursor:pointer; flex-shrink:0; }
   .send:disabled{ opacity:.4; }
 
-  /* ---- 动态 tab ---- */
+  /* ---- 动态 tab（朋友圈） ---- */
   .moments-body{ flex:1; overflow-y:auto; padding: 14px 14px 90px; }
-  .moment-compose{
-    background: var(--card); border:1px solid var(--card-line); border-radius:14px; padding:10px; margin-bottom:16px;
-  }
-  .moment-compose textarea{ width:100%; min-height:64px; background:transparent; border:none; color:var(--ink); font-size:14px; resize:vertical; outline:none; padding:2px; }
-  .moment-compose-actions{ display:flex; justify-content:flex-end; margin-top:4px; }
-  .moment-post-btn{ background: var(--lamp); color:#20140A; border:none; border-radius:10px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer; }
-  .moment-post-btn:disabled{ opacity:.4; }
-  .moment-card{ margin-bottom:20px; }
-  .moment-date{ font-size:11px; color: var(--ink-dim); margin-bottom:6px; }
-  .moment-text{ font-size:13.5px; line-height:1.7; color: var(--ink); white-space:pre-wrap; margin-bottom:10px; }
-  .moment-comment{
-    background: var(--bubble-ai); border:1px solid rgba(227,161,92,.18); border-radius:12px;
-    padding:10px 12px; font-size:13px; line-height:1.6; color: var(--ink); position:relative;
-  }
-  .moment-comment::before{ content:"💬 " attr(data-name); display:block; font-size:11px; color: var(--lamp); margin-bottom:4px; font-family:"Noto Serif SC", serif; }
-  .moment-comment.pending{ color: var(--ink-dim); font-style:italic; }
-  .moments-empty{ color: var(--ink-dim); font-size:13px; text-align:center; margin-top:40px; }
+  .feed-compose{ background: var(--card); border:1px solid var(--card-line); border-radius:14px; padding:10px; margin-bottom:18px; }
+  .feed-compose textarea{ width:100%; min-height:52px; background:transparent; border:none; color:var(--ink); font-size:14px; resize:vertical; outline:none; padding:2px; font-family:inherit; }
+  .feed-pick{ display:grid; grid-template-columns: repeat(5, 1fr); gap:6px; margin-top:6px; }
+  .feed-pick .pk{ position:relative; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#2A2E42; }
+  .feed-pick .pk img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .feed-pick .pk button{ position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%; border:none; background:rgba(0,0,0,.6); color:#fff; font-size:11px; line-height:18px; padding:0; cursor:pointer; }
+  .feed-pick .pk-add{ aspect-ratio:1; border-radius:8px; border:1px dashed rgba(255,255,255,.2); background:transparent; color: var(--ink-dim); font-size:20px; cursor:pointer; }
+  .feed-actions{ display:flex; justify-content:flex-end; margin-top:8px; }
+  .feed-post-btn{ background: var(--lamp); color:#20140A; border:none; border-radius:10px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .feed-post-btn:disabled{ opacity:.4; }
+  .post{ display:flex; gap:10px; padding:14px 0; border-bottom:1px solid var(--card-line); }
+  .post .p-avatar{ width:40px; height:40px; border-radius:8px; flex-shrink:0; object-fit:cover; }
+  .post .me-av{ background: radial-gradient(circle at 35% 30%, #F3C286, var(--lamp) 55%, var(--lamp-dim) 100%); color:#20140A; display:flex; align-items:center; justify-content:center; font-family:"Noto Serif SC", serif; font-size:16px; }
+  .post .p-main{ flex:1; min-width:0; }
+  .post .p-author{ font-size:13.5px; color: var(--lamp); font-family:"Noto Serif SC", serif; margin-bottom:3px; }
+  .post .p-text{ font-size:13.5px; line-height:1.65; color: var(--ink); white-space:pre-wrap; word-break:break-word; }
+  .post .p-imgs{ display:grid; grid-template-columns: repeat(3, 1fr); gap:4px; margin-top:7px; max-width:250px; }
+  .post .p-imgs.one{ grid-template-columns: 1fr; max-width:190px; }
+  .post .p-imgs img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px; display:block; background:#2A2E42; cursor:pointer; }
+  .post .p-imgs.one img{ aspect-ratio:auto; max-height:240px; }
+  .post .p-time{ font-size:11px; color: var(--ink-dim); margin-top:7px; }
+  .post .p-react{ margin-top:7px; background: rgba(255,255,255,.04); border-radius:6px; font-size:12.5px; line-height:1.6; }
+  .post .p-likes{ padding:5px 9px; color: var(--lamp); }
+  .post .p-likes + .p-comments{ border-top:1px solid var(--card-line); }
+  .post .p-comments{ padding:4px 9px; }
+  .post .p-comment{ color: var(--ink); padding:1px 0; word-break:break-word; }
+  .post .p-comment b{ color: var(--lamp); font-weight:normal; }
+  .post .p-comment i{ font-style:normal; color: var(--ink-dim); }
+  .moments-empty{ color: var(--ink-dim); font-size:13px; text-align:center; margin-top:40px; line-height:1.8; }
+  .img-viewer{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.92); display:none; align-items:center; justify-content:center; }
+  .img-viewer.open{ display:flex; }
+  .img-viewer img{ max-width:100%; max-height:100%; object-fit:contain; }
 
   /* ---- 设置 tab ---- */
   .settings-body{ flex:1; overflow-y:auto; padding: 14px 14px 90px; display:flex; flex-direction:column; gap:16px; }
@@ -227,6 +242,7 @@
 </style>
 </head>
 <body>
+<div class="img-viewer" id="imgViewer"><img id="imgViewerImg" alt=""></div>
 <div class="phone">
   <div class="screen">
     <div class="status"><span id="clock">23:41</span><span>●●●</span></div>
@@ -234,15 +250,15 @@
     <div class="panels">
       <!-- 动态 -->
       <div class="panel" id="panel-moments">
-        <div class="header"><div class="plain-title">动态</div></div>
+        <div class="header"><div class="plain-title">朋友圈</div></div>
         <div class="moments-body" id="momentsBody">
-          <div class="moment-compose">
-            <textarea id="momentInput" placeholder="今天过得怎么样，写下来说给 Ta 听……"></textarea>
-            <div class="moment-compose-actions">
-              <button class="moment-post-btn" id="momentPostBtn">发布</button>
-            </div>
+          <div class="feed-compose">
+            <textarea id="feedInput" placeholder="这一刻的想法……"></textarea>
+            <div class="feed-pick" id="feedPick"></div>
+            <input type="file" id="feedImageInput" accept="image/*" multiple style="display:none;">
+            <div class="feed-actions"><button class="feed-post-btn" id="feedPostBtn">发表</button></div>
           </div>
-          <div id="momentsList"></div>
+          <div id="feedList"></div>
         </div>
       </div>
 
@@ -302,14 +318,6 @@
         <div class="header"><div class="plain-title">设置</div></div>
         <div class="settings-body">
           <div class="settings-section">
-            <h4>备份日记（换浏览器/设备用）</h4>
-            <textarea id="migrateArea" placeholder="聊天记录和记忆已经存在后端了，这里只备份“动态”里的日记。点“导出”会把日记填进这里；要导入就把复制来的内容粘贴进来，再点“导入”"></textarea>
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button class="settings-save" id="exportBtn">导出到上面</button>
-              <button class="settings-save" id="importBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14);">从上面导入</button>
-            </div>
-          </div>
-          <div class="settings-section">
             <h4>连接</h4>
             <label>后端地址</label>
             <input id="backendInput" placeholder="https://xxx.onrender.com">
@@ -333,7 +341,7 @@
     </div>
 
     <div class="tabbar">
-      <button class="tab-btn" data-tab="moments"><span class="icon">✦</span>动态</button>
+      <button class="tab-btn" data-tab="moments"><span class="icon">✦</span>动态<span class="tab-dot" id="feedTabDot"></span></button>
       <button class="tab-btn active" data-tab="chat"><span class="icon">💬</span>信息<span class="tab-dot" id="chatTabDot"></span></button>
       <button class="tab-btn" data-tab="settings"><span class="icon">⚙</span>设置</button>
     </div>
@@ -373,7 +381,9 @@ function contactName(cid){
   return backendContacts[cid] || (CONTACT_INFO[cid] || {}).name || cid;
 }
 let thumbs = JSON.parse(localStorage.getItem('mp_thumbs') || '{}');           // { 消息时间: 缩略图 }
-let moments = JSON.parse(localStorage.getItem('mp_moments') || '[]');
+try{ localStorage.removeItem('mp_moments'); }catch(e){} // 旧的日记不要了（Jes 确认过，自己有留档）
+let feed = JSON.parse(localStorage.getItem('mp_feed') || '[]');       // 朋友圈的副本（正本在后端，照片不存手机）
+let feedReadAt = Number(localStorage.getItem('mp_feed_read') || 0);  // 朋友圈里别人的点赞、评论看到哪儿了
 let memories = JSON.parse(localStorage.getItem('mp_memories') || '[]');
 
 function safeSet(key, value){
@@ -383,7 +393,8 @@ const save = {
   history: (cid) => safeSet(histKey(cid), JSON.stringify(historyOf(cid))),
   contacts: () => safeSet('mp_contacts', JSON.stringify(backendContacts)),
   readAt: () => safeSet('mp_read', JSON.stringify(readAt)),
-  moments: () => safeSet('mp_moments', JSON.stringify(moments)),
+  feed: () => safeSet('mp_feed', JSON.stringify(feed)),
+  feedRead: () => safeSet('mp_feed_read', String(feedReadAt)),
   memories: () => safeSet('mp_memories', JSON.stringify(memories)),
   persona: () => safeSet('mp_persona', JSON.stringify(persona)),
   backend: () => safeSet('mp_backend', backendUrl),
@@ -458,6 +469,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if(btn.dataset.tab === 'settings') loadMemories();
+    if(btn.dataset.tab === 'moments'){ renderFeed(); updateFeedDot(); syncFeed(); }
     if(btn.dataset.tab === 'chat'){
       if(wasActive) closeConv(); // 已经在「信息」里再点一下，回到联系人列表（像微信）
       else if(currentConv){ markRead(currentConv); renderContacts(); }
@@ -1007,69 +1019,159 @@ document.addEventListener('visibilitychange', () => {
   chatIds().forEach(syncMessages);
 });
 
-/* ---------- 动态 tab（日记评论还是即时的） ---------- */
-const momentInput = document.getElementById('momentInput');
-const momentPostBtn = document.getElementById('momentPostBtn');
-const momentsList = document.getElementById('momentsList');
+/* ---------- 动态 tab：朋友圈 ---------- */
+// 正本在后端：她发的、大家的点赞和评论都从 /feed 拉。谁什么时候刷到、点不点赞，全由后端按作息决定
+const feedInput = document.getElementById('feedInput');
+const feedPostBtn = document.getElementById('feedPostBtn');
+const feedPickEl = document.getElementById('feedPick');
+const feedImageInput = document.getElementById('feedImageInput');
+const feedListEl = document.getElementById('feedList');
+const feedTabDot = document.getElementById('feedTabDot');
+const FEED_MAX_IMAGES = 9;
+let feedPicked = []; // 选好还没发的照片（压缩过的）
 
-function renderMoments(){
-  momentsList.innerHTML = '';
-  if(moments.length === 0){
-    momentsList.innerHTML = '<div class="moments-empty">还没有写过日记，写第一篇试试</div>';
+const feedImgUrl = (id) => backendUrl.replace(/\/$/, '') + '/feed/img/' + encodeURIComponent(id);
+const feedName = (who) => (who === 'jes' ? '我' : contactName(who));
+function feedTime(ts){
+  const d = Date.now() - ts;
+  if(d < 60000) return '刚刚';
+  if(d < 3600000) return Math.floor(d / 60000) + '分钟前';
+  if(d < 86400000) return Math.floor(d / 3600000) + '小时前';
+  const t = new Date(ts);
+  return (t.getMonth() + 1) + '月' + t.getDate() + '日 ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+}
+
+function renderFeedPick(){
+  feedPickEl.innerHTML = '';
+  feedPicked.forEach((p, i) => {
+    const box = document.createElement('div'); box.className = 'pk';
+    const img = document.createElement('img'); img.src = p.thumb; img.alt = '';
+    const x = document.createElement('button'); x.textContent = '×';
+    x.addEventListener('click', () => { feedPicked.splice(i, 1); renderFeedPick(); });
+    box.appendChild(img); box.appendChild(x); feedPickEl.appendChild(box);
+  });
+  if(feedPicked.length < FEED_MAX_IMAGES){
+    const add = document.createElement('button'); add.className = 'pk-add'; add.textContent = '＋'; add.title = '加照片';
+    add.addEventListener('click', () => feedImageInput.click());
+    feedPickEl.appendChild(add);
+  }
+}
+const readAsDataUrl = (file) => new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(file); });
+feedImageInput.addEventListener('change', async () => {
+  const files = [...feedImageInput.files].slice(0, FEED_MAX_IMAGES - feedPicked.length);
+  feedImageInput.value = '';
+  for(const f of files){
+    try{
+      const raw = await readAsDataUrl(f);
+      feedPicked.push({ full: await compressImage(raw, 1280, 0.8), thumb: await compressImage(raw, 200, 0.7) });
+      renderFeedPick();
+    }catch(e){ alert(e.message || '这张图片读不出来，换一张试试'); }
+  }
+});
+
+function renderFeed(){
+  feedListEl.innerHTML = '';
+  if(!feed.length){
+    feedListEl.innerHTML = '<div class="moments-empty">还没有发过朋友圈<br>随手拍点什么、说点什么吧</div>';
     return;
   }
-  [...moments].reverse().forEach(m => {
-    const card = document.createElement('div');
-    card.className = 'moment-card';
-    const dateDiv = document.createElement('div');
-    dateDiv.className = 'moment-date';
-    dateDiv.textContent = m.date;
-    const textDiv = document.createElement('div');
-    textDiv.className = 'moment-text';
-    textDiv.textContent = m.text;
-    const commentDiv = document.createElement('div');
-    commentDiv.className = 'moment-comment' + (m.reply ? '' : ' pending');
-    commentDiv.setAttribute('data-name', persona.name);
-    commentDiv.textContent = m.reply || '正在写评论…';
-    card.appendChild(dateDiv); card.appendChild(textDiv); card.appendChild(commentDiv);
-    momentsList.appendChild(card);
+  [...feed].sort((a, b) => b.ts - a.ts).forEach(p => {
+    const card = document.createElement('div'); card.className = 'post';
+    let av;
+    if(p.author === 'jes'){ av = document.createElement('div'); av.className = 'p-avatar me-av'; av.textContent = 'J'; }
+    else { av = document.createElement('img'); av.className = 'p-avatar'; av.alt = ''; av.src = (CONTACT_INFO[p.author] || {}).avatar || ''; }
+    const main = document.createElement('div'); main.className = 'p-main';
+    const author = document.createElement('div'); author.className = 'p-author'; author.textContent = p.author === 'jes' ? 'Jes' : contactName(p.author);
+    main.appendChild(author);
+    if(p.text){ const t = document.createElement('div'); t.className = 'p-text'; t.textContent = p.text; main.appendChild(t); }
+    if(p.images && p.images.length){
+      const grid = document.createElement('div'); grid.className = 'p-imgs' + (p.images.length === 1 ? ' one' : '');
+      p.images.forEach(id => {
+        const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = feedImgUrl(id);
+        img.addEventListener('click', () => openImageViewer(img.src));
+        grid.appendChild(img);
+      });
+      main.appendChild(grid);
+    }
+    const time = document.createElement('div'); time.className = 'p-time'; time.textContent = feedTime(p.ts);
+    main.appendChild(time);
+    const likes = p.likes || [], comments = p.comments || [];
+    if(likes.length || comments.length){
+      const box = document.createElement('div'); box.className = 'p-react';
+      if(likes.length){
+        const l = document.createElement('div'); l.className = 'p-likes';
+        l.textContent = '♡ ' + likes.map(x => feedName(x.who)).join('，');
+        box.appendChild(l);
+      }
+      if(comments.length){
+        const cs = document.createElement('div'); cs.className = 'p-comments';
+        comments.forEach(c => {
+          const row = document.createElement('div'); row.className = 'p-comment';
+          const who = document.createElement('b'); who.textContent = feedName(c.who);
+          row.appendChild(who);
+          if(c.to){
+            const r = document.createElement('i'); r.textContent = ' 回复 '; row.appendChild(r);
+            const to = document.createElement('b'); to.textContent = feedName(c.to); row.appendChild(to);
+          }
+          row.appendChild(document.createTextNode('：' + c.text));
+          cs.appendChild(row);
+        });
+        box.appendChild(cs);
+      }
+      main.appendChild(box);
+    }
+    card.appendChild(av); card.appendChild(main);
+    feedListEl.appendChild(card);
   });
 }
 
-async function postMoment(){
-  const text = momentInput.value.trim();
-  if(!text) return;
-  if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
-  momentInput.value = '';
-  momentPostBtn.disabled = true;
+// 底部「动态」的小圆点：有别人新的点赞或评论
+const feedLatestReaction = () => Math.max(0, ...feed.flatMap(p => [...(p.likes || []), ...(p.comments || [])].filter(x => x.who !== 'jes').map(x => x.ts)));
+const momentsActive = () => document.getElementById('panel-moments').classList.contains('active');
+function updateFeedDot(){
+  if(momentsActive() && !document.hidden){ const t = feedLatestReaction(); if(t > feedReadAt){ feedReadAt = t; save.feedRead(); } }
+  feedTabDot.style.display = feedLatestReaction() > feedReadAt ? 'block' : 'none';
+}
 
-  const entry = { date: new Date().toLocaleString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}), text, reply: null };
-  moments.push(entry);
-  save.moments();
-  renderMoments();
-
-  const memoryNote = memories.length
-    ? "\n\n[你还记得关于对方的这些事，可以自然地在合适的时候体现出来，不要生硬地逐条背出来：\n" + memories.map(m => "- " + m).join("\n") + "]"
-    : "";
-  const diarySystem = persona.system + memoryNote + "\n\n现在对方发来的是今天一整篇日记，不是普通聊天消息。请像朋友在评论区认真留言一样，详细回应这一整天——多提到几个具体的点和细节，语气走心，不要只泛泛地说'辛苦了'这种空话。可以写长一点，3-6句话。";
-
+async function syncFeed(){
+  if(!backendUrl) return;
   try{
-    const data = await api('/chat', { method: 'POST', body: { system: diarySystem, messages: [{role:'user', content:text}], max_tokens: 500 }, timeout: 90000 });
-    entry.reply = data.reply;
-    save.moments();
-    renderMoments();
-    api('/extract-memory', { method: 'POST', body: { recentMessages: [{role:'user', content:text}, {role:'assistant', content:data.reply}] } })
-      .then(d => { if(d.memories){ memories = d.memories; save.memories(); } })
-      .catch(() => {});
+    const data = await api('/feed', { timeout: 20000 });
+    if(data && Array.isArray(data.posts)){
+      const changed = JSON.stringify(data.posts) !== JSON.stringify(feed);
+      feed = data.posts;
+      if(changed){ save.feed(); renderFeed(); }
+      else if(momentsActive()) renderFeed(); // 刷新一下"几分钟前"
+    }
+  }catch(e){ /* 拿不到就先显示手机里的副本 */ }
+  updateFeedDot();
+}
+setInterval(syncFeed, 30000);
+
+async function postFeed(){
+  const text = feedInput.value.trim();
+  if(!text && !feedPicked.length) return;
+  if(!backendUrl){ alert('先去"设置"填后端地址'); return; }
+  feedPostBtn.disabled = true;
+  feedPostBtn.textContent = '发表中…';
+  try{
+    const data = await api('/feed/post', { method: 'POST', body: { text, images: feedPicked.map(p => p.full) }, timeout: 90000 });
+    feed.push(data.post); save.feed();
+    feedInput.value = ''; feedPicked = []; renderFeedPick(); renderFeed();
+    document.getElementById('momentsBody').scrollTop = 0;
   }catch(e){
-    entry.reply = '（评论失败了：' + e.message + '）';
-    save.moments();
-    renderMoments();
+    alert('没发出去（' + e.message + '），文字和照片都还在，可以再点一次');
   }finally{
-    momentPostBtn.disabled = false;
+    feedPostBtn.disabled = false;
+    feedPostBtn.textContent = '发表';
   }
 }
-momentPostBtn.addEventListener('click', postMoment);
+feedPostBtn.addEventListener('click', postFeed);
+
+// 点照片看大图，再点一下关掉
+const imgViewer = document.getElementById('imgViewer');
+function openImageViewer(src){ document.getElementById('imgViewerImg').src = src; imgViewer.classList.add('open'); }
+imgViewer.addEventListener('click', () => imgViewer.classList.remove('open'));
 
 /* ---------- 设置 tab ---------- */
 const backendInput = document.getElementById('backendInput');
@@ -1109,22 +1211,6 @@ async function loadMemories(){
   }catch(e){ /* 拿不到就先显示手机里的副本 */ }
 }
 
-document.getElementById('exportBtn').addEventListener('click', () => {
-  document.getElementById('migrateArea').value = JSON.stringify({ moments });
-});
-document.getElementById('importBtn').addEventListener('click', () => {
-  const text = document.getElementById('migrateArea').value.trim();
-  if(!text){ alert('先把要导入的内容粘贴到上面的框里'); return; }
-  if(!confirm('导入会覆盖这台设备上的日记，确定吗？')) return;
-  try{
-    const obj = JSON.parse(text);
-    if(obj.moments){ moments = obj.moments; save.moments(); }
-    alert('导入成功，页面马上刷新一下');
-    location.reload();
-  }catch(e){
-    alert('导入失败，内容格式不对，检查一下是不是完整复制了：' + e.message);
-  }
-});
 
 document.getElementById('saveConnBtn').addEventListener('click', () => {
   backendUrl = backendInput.value.trim();
@@ -1250,7 +1336,9 @@ async function init(){
   renderPersona();
   backendInput.value = backendUrl;
   renderContacts();
-  renderMoments();
+  renderFeedPick();
+  renderFeed();
+  updateFeedDot();
   renderMemoryList();
   if(!backendUrl){
     alert('先去"设置"填一下后端地址，才能真正聊起来');
@@ -1261,6 +1349,7 @@ async function init(){
   try{ await migrateLegacyIfNeeded(); }
   catch(e){ alert('旧聊天记录还没搬过去（' + e.message + '），下次打开会再试'); }
   await Promise.all(chatIds().map(syncMessages));
+  syncFeed();
   loadMemories();
 }
 init();
