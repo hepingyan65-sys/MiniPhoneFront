@@ -197,7 +197,15 @@
   .post .p-imgs.one{ grid-template-columns: 1fr; max-width:190px; }
   .post .p-imgs img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:4px; display:block; background:#2A2E42; cursor:pointer; }
   .post .p-imgs.one img{ aspect-ratio:auto; max-height:240px; }
-  .post .p-time{ font-size:11px; color: var(--ink-dim); margin-top:7px; }
+  .post .p-desc{ aspect-ratio:1; border-radius:4px; padding:7px; box-sizing:border-box; cursor:pointer; overflow:hidden;
+    background: linear-gradient(160deg, rgba(227,161,92,.18), rgba(136,146,172,.12)); border:1px solid rgba(227,161,92,.2);
+    font-size:10.5px; line-height:1.45; color: var(--ink); display:-webkit-box; -webkit-line-clamp:6; -webkit-box-orient:vertical; word-break:break-word; }
+  .post .p-desc::before{ content:"📷 "; }
+  .post .p-imgs.one .p-desc{ aspect-ratio:4/3; font-size:12px; -webkit-line-clamp:7; padding:10px; }
+  .post .p-foot{ display:flex; align-items:center; justify-content:space-between; margin-top:7px; }
+  .post .p-time{ font-size:11px; color: var(--ink-dim); }
+  .post .p-like-btn{ background:transparent; border:none; color: var(--ink-dim); font-size:15px; padding:0 4px; cursor:pointer; font-family:inherit; }
+  .post .p-like-btn.on{ color: var(--lamp); }
   .post .p-react{ margin-top:7px; background: rgba(255,255,255,.04); border-radius:6px; font-size:12.5px; line-height:1.6; }
   .post .p-likes{ padding:5px 9px; color: var(--lamp); }
   .post .p-likes + .p-comments{ border-top:1px solid var(--card-line); }
@@ -209,6 +217,8 @@
   .img-viewer{ position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.92); display:none; align-items:center; justify-content:center; }
   .img-viewer.open{ display:flex; }
   .img-viewer img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .img-viewer .desc-big{ display:none; max-width:300px; padding:22px; border-radius:12px; font-size:15px; line-height:1.8; color: var(--ink);
+    background: linear-gradient(160deg, rgba(227,161,92,.22), rgba(136,146,172,.14)); border:1px solid rgba(227,161,92,.3); }
 
   /* ---- 设置 tab ---- */
   .settings-body{ flex:1; overflow-y:auto; padding: 14px 14px 90px; display:flex; flex-direction:column; gap:16px; }
@@ -241,7 +251,7 @@
 </style>
 </head>
 <body>
-<div class="img-viewer" id="imgViewer"><img id="imgViewerImg" alt=""></div>
+<div class="img-viewer" id="imgViewer"><img id="imgViewerImg" alt=""><div class="desc-big" id="imgViewerDesc"></div></div>
 <div class="phone">
   <div class="screen">
     <div class="status"><span id="clock">23:41</span><span>●●●</span></div>
@@ -1083,17 +1093,33 @@ function renderFeed(){
     const author = document.createElement('div'); author.className = 'p-author'; author.textContent = p.author === 'jes' ? 'Jes' : contactName(p.author);
     main.appendChild(author);
     if(p.text){ const t = document.createElement('div'); t.className = 'p-text'; t.textContent = p.text; main.appendChild(t); }
-    if(p.images && p.images.length){
-      const grid = document.createElement('div'); grid.className = 'p-imgs' + (p.images.length === 1 ? ' one' : '');
-      p.images.forEach(id => {
+    const nPics = (p.images || []).length + (p.photos || []).length;
+    if(nPics){
+      const grid = document.createElement('div'); grid.className = 'p-imgs' + (nPics === 1 ? ' one' : '');
+      (p.images || []).forEach(id => {
         const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = feedImgUrl(id);
         img.addEventListener('click', () => openImageViewer(img.src));
         grid.appendChild(img);
       });
+      // 他们的照片暂时是文字描述，显示成一张"照片卡片"，点开看全文
+      (p.photos || []).forEach(d => {
+        const card = document.createElement('div'); card.className = 'p-desc'; card.textContent = d;
+        card.addEventListener('click', () => openDescViewer(d));
+        grid.appendChild(card);
+      });
       main.appendChild(grid);
     }
+    const foot = document.createElement('div'); foot.className = 'p-foot';
     const time = document.createElement('div'); time.className = 'p-time'; time.textContent = feedTime(p.ts);
-    main.appendChild(time);
+    foot.appendChild(time);
+    if(p.author !== 'jes'){ // 给他们的朋友圈点赞
+      const liked = (p.likes || []).some(l => l.who === 'jes');
+      const lb = document.createElement('button'); lb.className = 'p-like-btn' + (liked ? ' on' : ''); lb.textContent = liked ? '♥' : '♡';
+      lb.title = liked ? '取消赞' : '赞';
+      lb.addEventListener('click', () => toggleLike(p.id, lb));
+      foot.appendChild(lb);
+    }
+    main.appendChild(foot);
     const likes = p.likes || [], comments = p.comments || [];
     if(likes.length || comments.length){
       const box = document.createElement('div'); box.className = 'p-react';
@@ -1167,9 +1193,21 @@ async function postFeed(){
 }
 feedPostBtn.addEventListener('click', postFeed);
 
+async function toggleLike(postId, btn){
+  btn.disabled = true;
+  try{
+    const data = await api('/feed/like', { method: 'POST', body: { postId }, timeout: 20000 });
+    const i = feed.findIndex(x => x.id === postId);
+    if(i >= 0 && data.post){ feed[i] = data.post; save.feed(); }
+    renderFeed();
+  }catch(e){ btn.disabled = false; alert('没赞上（' + e.message + '）'); }
+}
+
 // 点照片看大图，再点一下关掉
 const imgViewer = document.getElementById('imgViewer');
-function openImageViewer(src){ document.getElementById('imgViewerImg').src = src; imgViewer.classList.add('open'); }
+const imgViewerImg = document.getElementById('imgViewerImg'), imgViewerDesc = document.getElementById('imgViewerDesc');
+function openImageViewer(src){ imgViewerImg.src = src; imgViewerImg.style.display = ''; imgViewerDesc.style.display = 'none'; imgViewer.classList.add('open'); }
+function openDescViewer(text){ imgViewerDesc.textContent = '📷 ' + text; imgViewerDesc.style.display = 'block'; imgViewerImg.style.display = 'none'; imgViewer.classList.add('open'); }
 imgViewer.addEventListener('click', () => imgViewer.classList.remove('open'));
 
 /* ---------- 设置 tab ---------- */

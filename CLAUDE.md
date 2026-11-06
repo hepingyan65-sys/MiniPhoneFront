@@ -57,14 +57,14 @@
 - **八卦**：我和某人聊完后，`detectGossip()` 让模型判断我这次说的话会不会传开，传的话记进 `state.gossip`，3～24 小时后其他人陆续"听说"（`reach`），听说后 3 天内会写进他们的提示词（`gossipNote()`），提起过一次就不再给（模型在 JSON 里回 `used_gossip`）。朋友那里：关于 Alistair 的事、我的大新闻、好笑劲爆的话都可能传；我让保密的，按 `GOSSIP_LEAK_CHANCE` 偶尔说漏嘴（Ollie、Paddy 嘴最快）。Alistair 那里：只炫耀我的好消息，私密的事绝不往外说。有人刚听说时，`noticeGossip()` 有一定概率让他提前来找我（每天主动次数上限照旧）。`/debug` 里能看到最近的八卦和谁什么时候听说。
 - **群聊**：「工地上的老伙计们」（对话 id `crew`，`GROUP_ID` / `GROUP_MEMBERS`）。他们自己在群里一段一段地聊（`maybeScene()`，一天最多 `MAX_SCENES_PER_DAY` 段，至少两个人醒着才聊，灵感从 `SCENE_SEEDS_*` 里随机挑），群聊用的简短人物介绍是 `GROUP_CAST`；很少（`SCENE_MENTION_JES_CHANCE`）有人提到或 @我。我在群里说话由 `doGroupReply()` 让醒着的人回。群里的消息带 `speaker`（谁说的）。模型给每条写 `wait`（离上一条几分钟，可以故意停很久制造"装死"效果），消息先排进 `outbox` 队列，`tick()` 里的 `flushGroupOutbox()` 到点再发；我在群里插话时队列清空、改成回我。只有 @Jessie 或回我的第一条才推送，我这边半夜（日本 1–8 点）@我 的不推送。私聊里的人现在还不知道群里聊了什么。
 - **群里 @ 人**：`mentionedIn()` 认出我 @ 了谁（`MENTION_NAMES`，比如 @Alis / @Alistair 都算），`planMentions()` 给每个被 @ 的人掷一次骰子：醒着的 `MENTION_FAST_CHANCE`（80%）马上上线回我，其余是真的在忙、按平时速度晚点回；睡着的 `MENTION_WAKE_CHANCE`（15%）被吵醒，被吵醒的样子在 `WAKE_STYLE`（Nell、Paddy 不生气；Ollie、Alis 脸滚键盘或只回"困"又睡过去；Tom 先骂一句 What the fuck are you calling me for），其余等醒来再回。当时没看到的人记在群对话的 `lateReplies` 里，`maybeLateReply()` 到点让他专门来回我。`/debug` 里能看到每个人掷到了什么、几分钟后看到。
-- **朋友圈**：存在 `state.feed`（`posts` + 每个人下次刷的时间 `nextBrowse`），照片单独存在 `miniphone:img:<id>`，动态里只记 id，`/feed/img/:id` 取图。五个人各自不定时"刷朋友圈"（`maybeBrowseFeed()` / `browseFeed()`，间隔看作息：睡觉不刷、上班 1.5–4 小时、下班 20–90 分钟，再乘各人的 `every`），刷到没看过的动态按 `FEED_HABITS` 掷骰子点赞/评论（Alis 基本每条都赞；Ollie 话多但常忘了点赞；Paddy 一直窥屏不留痕迹，看过什么记在 `seen` 里，前端看不到；Tom 潜水）。`writeComment()` 写评论（照片给模型看，可回复别人的评论），评论我的才推送。三天前的动态只划过去。接口：`GET /feed`、`POST /feed/post`。
+- **朋友圈**：存在 `state.feed`（`posts` + 每个人下次刷的时间 `nextBrowse`），照片单独存在 `miniphone:img:<id>`，动态里只记 id，`/feed/img/:id` 取图。五个人各自不定时"刷朋友圈"（`maybeBrowseFeed()` / `browseFeed()`，间隔看作息：睡觉不刷、上班 1.5–4 小时、下班 20–90 分钟，再乘各人的 `every`），刷到没看过的动态按 `FEED_HABITS` 掷骰子点赞/评论（Alis 基本每条都赞；Ollie 话多但常忘了点赞；Paddy 一直窥屏不留痕迹，看过什么记在 `seen` 里，前端看不到；Tom 潜水）。`writeComment()` 写评论（照片给模型看，可回复别人的评论），评论我的才推送。三天前的动态只划过去。他们自己也发朋友圈（`maybeFriendPost()` / `writePost()`，平均每 `postDays` 天一条：Ollie 1、Alis 2、Nell 3、Tom 5、Paddy 10；睡觉不发，上班多半忍着），照片暂时是文字描述，存在动态的 `photos` 里；大家刷到彼此的动态按 `otherLike` / `otherComment` 互相点赞评论，他们之间的评论不推送。接口：`GET /feed`、`POST /feed/post`、`POST /feed/like`（我点赞/取消）。
 - **记忆**：`extractMemory()` 从聊天和日记里提炼长期记忆（只记稳定的喜好/身份/状态，不记一次性琐事）。
 - **模型**：DeepSeek，常量 `MODEL`。调用时关闭了 thinking（之前出现过模型返回空内容导致一整晚不回的问题，这是修复方案）。不经我同意不要换模型。
 - **调试**：浏览器打开 `后端地址/debug` 能看到他当前状态、闹钟、未回消息数。
 
 ## 前端架构要点（index.html）
 
-- 微信风格三个 Tab：**动态**（朋友圈：我发文字和最多 9 张照片，五个人陆续点赞、评论）／**信息**（聊天）／**设置**（后端地址、通知、记忆管理、日记备份）
+- 微信风格三个 Tab：**动态**（朋友圈：我发文字和最多 9 张照片，五个人陆续点赞、评论；他们也发，照片显示成可以点开的文字"照片卡片"，我可以点赞）／**信息**（聊天）／**设置**（后端地址、通知、记忆管理、日记备份）
 - 「信息」先是联系人列表（`CONTACT_INFO` / `CONTACT_ORDER`，头像照片在 `avatars/`，我自己的头像是 `avatars/jes.jpg`），点进去才是聊天；后端 `/contacts` 里没登记的人显示成灰色、点不进去。群聊排在 Alistair 下面，头像是合照 `avatars/crew.jpg`，群里每条消息带小头像和名字；群像开了免打扰，只有 @我 的消息才会让底部「信息」亮小圆点。列表显示最后一条消息、时间和未读数，底部「信息」有未读小圆点
 - 群里长按某人的小头像（电脑上右键）往输入框插入「@名字 」（`insertMention()`）；短按打开资料页（`openProfile()`，资料写在 `CONTACT_INFO` 的 `full` / `role` / `where`，此刻几点、在干嘛从 `/messages` 的 status 拿），资料页的「发消息」直接进私聊
 - 聊天记录和记忆的"正本"在后端，手机 localStorage 只存副本：`mp_history_v2`（Alistair 的聊天记录，名字沿用旧的）、`mp_history_<联系人id>`（朋友们的）、`mp_read`（每个对话看到哪条了，算未读用）、`mp_contacts`（后端登记的联系人）、`mp_thumbs`（图片缩略图）、`mp_feed`（朋友圈副本，照片不存手机）、`mp_feed_read`（朋友圈的点赞评论看到哪儿了，算「动态」小圆点用）、`mp_memories`、`mp_persona`、`mp_backend`
@@ -108,6 +108,7 @@
 - **动态改成朋友圈（第一步）**：不再是交日记、Alis 必写长评论，改成发日常的短文字和照片。五个人按作息不定时刷朋友圈，有的点赞、有的评论、有的划过去，不会一发出去就五个人秒评。旧日记删除（Jes 有留档）。
   - 接下来的第二步：他们自己发朋友圈（照片先用文字描述）；第三步：评论区互动（我回复评论他们会回、私聊里知道朋友圈的事、Paddy 拿窥屏到的东西吓我）。
 - **我的头像**：朋友圈里我的头像换成羊毛毡小人照片 `avatars/jes.jpg`（原来是一个写着 J 的圆块）。
+- **朋友圈第二步：他们也发朋友圈**：五个人按各自的频率发自己的生活（照片先用一句画面描述代替，等以后有图片生成再换真图），彼此之间也会点赞、互相吐槽；我可以给他们点赞。这样朋友圈不只是我一个人在发。
 
 ### 2026-11-05
 - **回复拆条**：模型回复里空一行的两段，拆成两条分开发，更有人味。单次上限从 5 条调到 6 条，免得拆完后最后一句被截掉。
