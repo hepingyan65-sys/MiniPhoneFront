@@ -61,7 +61,7 @@
     opacity:.8; filter: blur(4px) saturate(.9) brightness(.72); transform: scale(1.03);
     transition: filter .3s, transform .3s;
   }
-  .screen:has(#convView[style*="display: flex"])::before{ filter: saturate(.95) brightness(.9); transform:none; }
+  .screen.in-chat::before{ filter: saturate(.95) brightness(.9); transform:none; }
   /* 上下各压一层深色，让标题和输入框的字看得清 */
   .screen::after{
     content:''; position:absolute; inset:0; z-index:-1;
@@ -537,6 +537,11 @@ function fmtClock(){
 fmtClock(); setInterval(fmtClock, 30000);
 
 /* ---------- Tab 切换 ---------- */
+// 背景：只有在「信息」里点进了某个聊天才变清楚，其他时候微微虚化（由 JS 明确贴标签，iPhone 上更可靠）
+function updateBg(){
+  const inChat = !!currentConv && document.getElementById('panel-chat').classList.contains('active');
+  document.querySelector('.screen').classList.toggle('in-chat', inChat);
+}
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const wasActive = btn.classList.contains('active');
@@ -544,6 +549,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    updateBg();
     if(btn.dataset.tab === 'settings') loadMemories();
     if(btn.dataset.tab === 'moments'){ renderFeed(); updateFeedDot(); syncFeed(); }
     if(btn.dataset.tab === 'chat'){
@@ -739,6 +745,7 @@ function openConv(cid){
   renderStatus();
   contactsView.style.display = 'none';
   convView.style.display = 'flex';
+  updateBg();
   renderChat();
   markRead(cid);
   renderContacts();
@@ -749,6 +756,7 @@ function closeConv(){
   closeMsgMenu();
   currentConv = null;
   convView.style.display = 'none';
+  updateBg();
   contactsView.style.display = 'flex';
   renderContacts();
 }
