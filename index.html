@@ -133,6 +133,16 @@
     background: rgba(255,255,255,.05); border-radius:8px; padding:5px 9px; cursor:pointer;
     overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; word-break:break-word;
   }
+  /* 动作描写：从他们的消息里拆出来，像剧本里的舞台提示，写在气泡上方（设置里可以关掉） */
+  .stage{ max-width:76%; font-size:11.5px; line-height:1.55; color: var(--ink-dim); font-style:italic; padding:0 4px; white-space:pre-wrap; word-break:break-word; }
+  .row.with-stage{ flex-direction:column; align-items:flex-start; gap:4px; }
+  .row.with-speaker .col .stage{ max-width:100%; }
+  .switch-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; color: var(--ink); }
+  .switch-row .hint{ display:block; font-size:11px; color: var(--ink-dim); margin-top:2px; }
+  .switch{ position:relative; width:42px; height:24px; border-radius:12px; border:none; padding:0; background: rgba(255,255,255,.14); cursor:pointer; flex-shrink:0; transition: background .2s; }
+  .switch::after{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background: var(--ink); transition: transform .2s; }
+  .switch.on{ background: var(--lamp); }
+  .switch.on::after{ transform: translateX(18px); }
   .msg-menu{
     position:fixed; z-index:50; display:flex; gap:2px; padding:4px;
     background:#2A2E42; border:1px solid var(--card-line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.5);
@@ -349,6 +359,13 @@
           <div class="settings-section">
             <h4>聊天记录</h4>
             <button class="settings-save" id="clearHistoryBtn" style="background:transparent; color:var(--ink-dim); border:1px solid rgba(255,255,255,.14);">清空聊天记录</button>
+          </div>
+          <div class="settings-section">
+            <h4>聊天显示</h4>
+            <div class="switch-row">
+              <span>显示动作描写<span class="hint">括号里的动作，像舞台提示一样写在气泡上方</span></span>
+              <button class="switch" id="actionsSwitch" aria-label="显示动作描写"></button>
+            </div>
           </div>
           <div class="settings-section">
             <h4>主动消息通知</h4>
@@ -633,7 +650,8 @@ const speakerName = (id) => (CONTACT_INFO[id] ? contactName(id) : '某人');
 function previewOf(cid, m){
   const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
   if(m.role === 'user') return '我：' + t;
-  return (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '') + cleanStamps(t).replace(/\s+/g, ' ');
+  const s = splitAction(cleanStamps(t)); // 列表里只显示他说的话；只有动作的才显示动作
+  return (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '') + (s.speech || s.action).replace(/\s+/g, ' ');
 }
 
 function renderContacts(){
@@ -729,7 +747,15 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     row.appendChild(av); row.appendChild(col);
     holder = col;
   }
-  holder.appendChild(b);
+  // 动作描写：气泡上方一行灰色小字
+  if(opts.action){
+    if(holder === row) row.classList.add('with-stage');
+    const st = document.createElement('div');
+    st.className = 'stage';
+    st.textContent = opts.action;
+    holder.appendChild(st);
+  }
+  if(text || imageDataUrl) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
   if(opts.replyTo){
     if(holder === row) row.classList.add('has-quote');
     const q = document.createElement('div');
@@ -752,7 +778,8 @@ let replyingTo = null; // 正在引用的那条消息的 id
 function findMsg(id){ return currentConv ? historyOf(currentConv).find(m => m.id === id) : null; }
 function snippetOf(m){
   if(!m) return '原消息已经不在了';
-  const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
+  let t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
+  if(m.role !== 'user'){ const s = splitAction(t); t = s.speech || s.action; } // 引用框里也只放他说的话
   return (m.role === 'user' ? '我' : (m.speaker ? speakerName(m.speaker) : contactName(currentConv))) + '：' + t;
 }
 
@@ -936,11 +963,24 @@ function maybeTimeDivider(ts){
 
 // 以前有几条消息里夹着后端的时间标记（"[你那边 11月5日 …]"），手机里存的副本还留着，显示时擦掉
 const cleanStamps = (t) => String(t || '').replace(/\s*\[(?:她|你)那边[^\]]*\]\s*/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim();
+// 动作描写：他们消息里（…）的部分拆出来，单独显示在气泡上方；她自己的消息不拆
+let showActions = localStorage.getItem('mp_show_actions') !== '0'; // 默认显示
+function splitAction(t){
+  const acts = [];
+  const speech = String(t || '')
+    .replace(/（[^）]*）|\([^)]*\)/g, (x) => { acts.push(x); return ''; })
+    .replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return { action: acts.join(' '), speech };
+}
 function bubbleForMessage(m){
-  maybeTimeDivider(m.ts);
   const thumb = thumbs[m.ts];
-  const text = (m.role === 'user' ? m.text : cleanStamps(m.text)) || (m.hadImage && !thumb ? '[图片]' : '');
-  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker });
+  let text = m.role === 'user' ? m.text : cleanStamps(m.text);
+  let action = '';
+  if(m.role !== 'user'){ const s = splitAction(text); text = s.speech; action = showActions ? s.action : ''; }
+  if(!text && !action && !m.hadImage && !thumb) return; // 只有动作、又关掉了显示：这条就不出现
+  maybeTimeDivider(m.ts);
+  text = text || (m.hadImage && !thumb ? '[图片]' : '');
+  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, action });
 }
 
 function renderChat(){
@@ -1263,6 +1303,15 @@ function openDescViewer(text){ imgViewerDesc.textContent = '📷 ' + text; imgVi
 imgViewer.addEventListener('click', () => imgViewer.classList.remove('open'));
 
 /* ---------- 设置 tab ---------- */
+// 「显示动作描写」开关：只存在这台手机上（mp_show_actions），切换后马上重画聊天
+const actionsSwitch = document.getElementById('actionsSwitch');
+actionsSwitch.classList.toggle('on', showActions);
+actionsSwitch.addEventListener('click', () => {
+  showActions = !showActions;
+  try{ localStorage.setItem('mp_show_actions', showActions ? '1' : '0'); }catch(e){}
+  actionsSwitch.classList.toggle('on', showActions);
+  renderChat();
+});
 const backendInput = document.getElementById('backendInput');
 const memoryListEl = document.getElementById('memoryList');
 
