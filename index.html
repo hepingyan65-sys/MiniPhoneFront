@@ -1053,9 +1053,14 @@ async function syncMessages(cid){
     const after = h.length ? h[h.length - 1].ts : 0;
     const data = await api('/messages?conv=' + encodeURIComponent(cid) + '&after=' + after, { timeout: 30000 });
     updateStatus(cid, data.status);
-    let added = false;
+    let added = false, edited = false;
     (data.messages || []).forEach(m => {
-      if(h.some(x => x.id === m.id)) return;
+      const old = h.find(x => x.id === m.id);
+      if(old){
+        // 后端改过的旧消息：把手机里这条也换成新的
+        if(old.text !== m.text){ old.text = m.text; edited = true; }
+        return;
+      }
       h.push(m);
       if(cid === currentConv){
         if(emptyNote){ emptyNote.remove(); emptyNote = null; }
@@ -1063,6 +1068,8 @@ async function syncMessages(cid){
       }
       added = true;
     });
+    if(edited && !added){ save.history(cid); if(cid === currentConv) renderChat(); renderContacts(); }
+    else if(edited && cid === currentConv) renderChat();
     if(added){
       save.history(cid);
       if(isViewing(cid)) markRead(cid);
