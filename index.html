@@ -1054,6 +1054,11 @@ async function syncMessages(cid){
     const data = await api('/messages?conv=' + encodeURIComponent(cid) + '&after=' + after, { timeout: 30000 });
     updateStatus(cid, data.status);
     let added = false, edited = false;
+    // 后端删掉的消息：手机里的副本也删掉
+    const removed = Array.isArray(data.removed) ? data.removed : [];
+    for(let i = h.length - 1; i >= 0; i--){
+      if(removed.includes(h[i].id)){ h.splice(i, 1); edited = true; }
+    }
     (data.messages || []).forEach(m => {
       const old = h.find(x => x.id === m.id);
       if(old){
