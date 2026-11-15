@@ -35,6 +35,7 @@
 - `DEEPSEEK_API_KEY`：模型 API
 - `UPSTASH_REDIS_REST_URL`、`UPSTASH_REDIS_REST_TOKEN`：云数据库
 - `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`：Web Push 推送（配对生成，不要随便改）
+- `UNSPLASH_ACCESS_KEY`：他们发照片时去 Unsplash 图库搜图（不设的话照片都退回成文字卡片）
 
 需要新增环境变量时，告诉我名字和用途，由我自己去 Render 后台填。
 
@@ -59,6 +60,7 @@
 - **群里 @ 人**：`mentionedIn()` 认出我 @ 了谁（`MENTION_NAMES`，比如 @Alis / @Alistair 都算），`planMentions()` 给每个被 @ 的人掷一次骰子：醒着的 `MENTION_FAST_CHANCE`（80%）马上上线回我，其余是真的在忙、按平时速度晚点回；睡着的 `MENTION_WAKE_CHANCE`（15%）被吵醒，被吵醒的样子在 `WAKE_STYLE`（Nell、Paddy 不生气；Ollie、Alis 脸滚键盘或只回"困"又睡过去；Tom 先骂一句 What the fuck are you calling me for），其余等醒来再回。当时没看到的人记在群对话的 `lateReplies` 里，`maybeLateReply()` 到点让他专门来回我。`/debug` 里能看到每个人掷到了什么、几分钟后看到。
 - **朋友圈**：存在 `state.feed`（`posts` + 每个人下次刷的时间 `nextBrowse`），照片单独存在 `miniphone:img:<id>`，动态里只记 id，`/feed/img/:id` 取图。五个人各自不定时"刷朋友圈"（`maybeBrowseFeed()` / `browseFeed()`，间隔看作息：睡觉不刷、上班 1.5–4 小时、下班 20–90 分钟，再乘各人的 `every`），刷到没看过的动态按 `FEED_HABITS` 掷骰子点赞/评论（Alis 基本每条都赞；Ollie 话多但常忘了点赞；Paddy 一直窥屏不留痕迹，看过什么记在 `seen` 里，前端看不到；Tom 潜水）。`writeComment()` 写评论（照片给模型看，可回复别人的评论），评论我的才推送。三天前的动态只划过去。他们自己也发朋友圈（`maybeFriendPost()` / `writePost()`，平均每 `postDays` 天一条：Ollie 1、Alis 2、Nell 3、Tom 5、Paddy 10；睡觉不发，上班多半忍着），照片暂时是文字描述，存在动态的 `photos` 里；大家刷到彼此的动态按 `otherLike` / `otherComment` 互相点赞评论，他们之间的评论不推送。我在评论区说话（`POST /feed/comment`，可带 `to` 回复某人）时，被我回复的人、或者我评论的那条动态的主人一定会排进 `feed.replies`，到点（按作息，醒着比平时快一点）由 `maybeFeedReply()` 让他看了我这句话再决定回不回（不掷骰子：问他问题、关心他就一定回，"好的""哈哈"这种收尾可以不回；各人习惯在 `FEED_REPLY_STYLE`），回我的推送。私聊提示词里有 `feedNote()`（他刷到过的我最近三天的朋友圈和评论区、他自己最近发的）；Paddy 例外，他的窥屏由 `lurkNote()` 按 `PADDY_REVEAL_CHANCE`（25%）在私聊或群里突然抖出一条我 6 小时前以上、他从没互动过的朋友圈，每条只抖一次（`revealed`）。接口：`GET /feed`、`POST /feed/post`、`POST /feed/like`（我点赞/取消）、`POST /feed/comment`。
 - **按需回忆**：Alis 和我相遇那段日子（横滨山手老西洋馆修复项目，我是学生口译）的往事卡片在 `memories.js`（`MEMORY_CARDS`：`id` / `title` / `hint` / `text`），平时不进提示词。只有 Alis 私聊里回我消息时（`generateMessages` 的 reply 模式），才带上 DeepSeek 的 function calling 工具 `recall_memory`（参数 `id` 用 enum 限定），并在人设后面接上一行入口 `RECALL_ENTRY`（没写进 `PERSONA_SYSTEM`，关掉功能就一起消失）。模型要卡片时，`askDeepSeek()` 的工具循环把卡片作为 `tool` 消息交回去再问，一次回复最多 `RECALL_MAX_ROUNDS`（2）轮，最后一轮用 `tool_choice: "none"` 逼他直接回；最终回复还是 `{"messages": [...]}`（实测 JSON 模式和工具可以一起用；我们关着 thinking，不用传回 `reasoning_content`）。`hint` 是写进工具说明的"目录"，只写哪段日子、不写细节，写太细他会凭目录编、不去翻卡片。主动消息、晚安、群聊、朋友们都不带这个工具。开关：环境变量 `RECALL_MEMORY=off` 关掉（不设就是开着）。每次回忆打一行日志 `[回忆] Alis 想起了 …`，`/debug` 的「Alis的回忆」里有最近 10 次（只在内存里，重启清空）。加卡片就在 `memories.js` 里照格式加一项。
+- **发照片**：逻辑在 `photos.js`。发图规则 `PHOTO_RULE` 单独追加在提示词里（私聊的回复和主动消息、群聊都有；人设没动）：想发照片时单独一条写 `[图片|英文关键词|中文画面描述]`；拍自己、彼此、Jessie、宠物、自己画的画这种独一无二的东西，关键词写"无"。`splitPhotos()` 在 `parseMessages()` 和 `generateGroup()` 里把标记拆成单独一条（模型学着写的 `[照片：…]` 也认），一次最多 `PHOTO_MAX_PER_TURN`（2）张。`resolvePhoto()` 拿关键词去 Unsplash 搜（`/search/photos`，请求头 `Authorization: Client-ID <key>`，从前 5 张里随机挑，尽量不重复；用了哪张就调一次它的 `download_location` 通知 Unsplash，这是官方规定），存成消息的 `photo`：`{ desc, query, url, full, w, h, alt, by, byUrl, page, site, siteUrl }`（`url` 必须直接用 Unsplash 给的链接，不能自己存图；署名链接带 `utm_source=miniphone&utm_medium=referral`），`text` 写成 `[照片：描述]` 给旧前端和八卦/记忆看。私聊在 `deliver()` 发的时候搜，群聊在 `generateGroup()` 里搜好再排队。搜不到、出错、没 key、关键词是"无"：`photo` 里只有 `desc`，前端显示成文字照片卡片，绝不打断聊天。喂给模型时用 `photoForModel()` 写成 `[某人发了一张照片：描述（图里实际拍到的：Unsplash 的 alt_description）]`，这样大家点评的是图里真有的东西。推送和小组件只显示"[照片]"。
 - **记忆**：`extractMemory()` 从聊天和日记里提炼长期记忆（只记稳定的喜好/身份/状态，不记一次性琐事）。
 - **模型**：DeepSeek，常量 `MODEL`。调用时关闭了 thinking（之前出现过模型返回空内容导致一整晚不回的问题，这是修复方案）。不经我同意不要换模型。
 - **调试**：浏览器打开 `后端地址/debug` 能看到他当前状态、闹钟、未回消息数。
@@ -71,6 +73,7 @@
 - 群里长按某人的小头像（电脑上右键）往输入框插入「@名字 」（`insertMention()`）；短按打开资料页（`openProfile()`，资料写在 `CONTACT_INFO` 的 `full` / `role` / `where`，此刻几点、在干嘛从 `/messages` 的 status 拿），资料页的「发消息」直接进私聊
 - 聊天记录和记忆的"正本"在后端，手机 localStorage 只存副本：`mp_history_v2`（Alistair 的聊天记录，名字沿用旧的）、`mp_history_<联系人id>`（朋友们的）、`mp_read`（每个对话看到哪条了，算未读用）、`mp_contacts`（后端登记的联系人）、`mp_thumbs`（图片缩略图）、`mp_feed`（朋友圈副本，照片不存手机）、`mp_feed_read`（朋友圈的点赞评论看到哪儿了，算「动态」小圆点用）、`mp_memories`、`mp_persona`、`mp_backend`、`mp_show_actions`（显示动作描写开关）
 - 前端轮询 `/messages?conv=&after=` 拉每个能聊的对话的新消息（正在聊的人在线时 4 秒一次，其他 15 秒一次）
+- **照片消息**：消息带 `photo` 时 `fillPhoto()` 画成雾玻璃相框（按图片比例，加载前是一层流动的雾，加载完淡入），左下角小字「Photo by 摄影师 on Unsplash」带链接（Unsplash 要求署名摄影师和 Unsplash），点开看大图；没有 `url`（或图打不开）就画成 📷 文字照片卡片，点开看全文。联系人列表里显示「[照片]」。
 - **动作描写**：他们消息里（…）的动作由 `splitAction()` 拆出来，像舞台提示一样写在气泡上方（灰色斜体小字），只有动作的消息就只有这一行；联系人列表和引用框里只显示说的话。设置里「显示动作描写」开关存在 `mp_show_actions`（默认开），关掉后只剩气泡。她自己的消息不拆
 - 长按气泡（电脑上右键）弹出「引用 / 复制」菜单；引用的原文显示在气泡下方的灰色小框里，点一下会跳回原消息
 - 旧的"日记 + Alis 即时长评论"已经删掉（`mp_moments` 会被清除，Jes 自己有留档）；后端 `/chat` 接口还在，但前端已经不用了
@@ -106,6 +109,9 @@
 ## 更新日志
 
 > 每次上线新功能或改动行为，在最上面加一条：日期 + 做了什么 + 为什么。
+
+### 2026-11-15（二）
+- **他们会发真的照片了（Unsplash 图库）**：以前他们想发照片只能在气泡里打"照片"两个字。现在想发时写 `[图片|英文关键词|中文描述]`，后端去 Unsplash 免费图库搜一张真照片发出来，带摄影师署名；搜不到就退回成文字照片卡片。为什么用图库：风景、街道、建筑这种"路过拍一张"的图库里就是真人拍的照片，而且免费、不占数据库空间。固定的人和宠物（比如 Milo）每次搜出来长得都不一样，所以先发成文字卡片，以后可能再接 AI 生图专门画这些（第二步，还没做）。给模型看照片时，除了他自己写的描述，还附上 Unsplash 写的"图里实际拍到的"，免得大家点评图里没有的细节。本地测试时发现他会把规则示例里的"窗过梁下沉"当成自己照片里的东西说出来，所以示例后面加了"只示范格式，不要照搬"。本来做的是 Pexels，但 Pexels 从 2026 年 9 月底起暂停发新的 API Key，所以换成 Unsplash（它规定直接引用图片链接，和我们的做法一样，不占数据库；新 App 是试用模式，每小时 50 次，够用）。需要在 Render 设 `UNSPLASH_ACCESS_KEY`。
 
 ### 2026-11-15
 - **修复：Alis 把"翻回忆卡片"的指令当成消息发了出来**：DeepSeek 偶尔不走正规的工具调用通道，而是把 `recall_memory` 的调用用它内部的 DSML 格式（`<｜DSML｜function_calls>…`）直接写进正文，后端当成他说的话拆成气泡发了出来（恐怖谷）。现在 `askDeepSeek()` 认出正文里的 DSML（`parseToolMarkup()`），能用工具时当成真的调用去翻卡片，不能用时扔掉；`parseMessages()` 兜底：带 DSML 标记的内容一律不发。
