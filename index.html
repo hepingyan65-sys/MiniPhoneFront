@@ -148,6 +148,24 @@
   .note.time-note{ font-size:11px; color:#C9D2C4; opacity:.85; padding:2px 10px; letter-spacing:.3px; }
   .bubble img{ max-width:100%; border-radius:10px; display:block; margin-top:6px; }
   .bubble img:first-child{ margin-top:0; }
+  /* 他们发的照片（Unsplash 图库）：雾玻璃小相框，加载出来之前是一层慢慢流动的雾 */
+  .bubble.photo{ padding:4px; width:min(232px, 64vw); max-width:76%; }
+  .photo-frame{ position:relative; border-radius:11px; overflow:hidden; background: var(--placeholder); cursor:zoom-in; aspect-ratio:4/3; }
+  .photo-frame::before{ content:''; position:absolute; inset:0;
+    background: linear-gradient(100deg, transparent 20%, rgba(207,192,154,.10) 45%, rgba(157,176,154,.14) 55%, transparent 80%);
+    background-size:220% 100%; animation: photoFog 1.6s ease-in-out infinite; }
+  .photo-frame.loaded::before{ display:none; }
+  @keyframes photoFog{ from{ background-position:120% 0; } to{ background-position:-120% 0; } }
+  .bubble .photo-frame img{ width:100%; height:100%; object-fit:cover; display:block; margin:0; border-radius:0; opacity:0; transition: opacity .45s; }
+  .photo-frame.loaded img{ opacity:1; }
+  .photo-credit{ position:absolute; left:0; right:0; bottom:0; padding:14px 8px 5px; font-size:9px; line-height:1.3; letter-spacing:.2px;
+    color: rgba(230,234,223,.78); background: linear-gradient(transparent, rgba(7,10,8,.6)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0; transition: opacity .45s; }
+  .photo-frame.loaded .photo-credit{ opacity:1; }
+  .photo-credit a{ color:inherit; text-decoration:none; border-bottom:1px solid rgba(207,192,154,.35); }
+  /* 搜不到图时的文字照片卡片（和朋友圈里的照片卡片同一个样子） */
+  .bubble.photo-card{ cursor:pointer; font-size:12.5px; line-height:1.6;
+    background: linear-gradient(160deg, rgba(157,176,154,.28), rgba(207,192,154,.12)) !important; border:1px solid var(--glass-edge); }
+  .bubble.photo-card::before{ content:"📷 "; }
 
   /* 引用：长按气泡弹出菜单，引用的原文显示在气泡下面的灰色小框里（像微信） */
   .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
@@ -690,6 +708,7 @@ function avatarFor(cid, size){
 }
 const speakerName = (id) => (CONTACT_INFO[id] ? contactName(id) : '某人');
 function previewOf(cid, m){
+  if(m.photo) return (m.role === 'user' ? '我：' : (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '')) + '[照片]';
   const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
   if(m.role === 'user') return '我：' + t;
   const s = splitAction(cleanStamps(t)); // 列表里只显示他说的话；只有动作的才显示动作
@@ -762,12 +781,42 @@ function closeConv(){
 }
 document.getElementById('backBtn').addEventListener('click', closeConv);
 
+// 他们发的照片：有图就画成相框（角落小字注明摄影师和图库），没图（搜不到）就画成文字照片卡片
+function fillPhoto(b, p){
+  const card = () => { b.className = 'bubble photo-card'; b.textContent = p.desc || '照片'; b.onclick = () => openDescViewer(p.desc || '照片'); };
+  if(!p.url){ card(); return; }
+  b.classList.add('photo');
+  const frame = document.createElement('div');
+  frame.className = 'photo-frame';
+  if(p.w && p.h) frame.style.aspectRatio = String(Math.min(1.5, Math.max(0.75, p.w / p.h)));
+  const img = document.createElement('img');
+  img.alt = p.desc || '';
+  img.loading = 'lazy';
+  img.onload = () => frame.classList.add('loaded');
+  img.onerror = () => { b.innerHTML = ''; card(); }; // 图打不开了，也退回成文字卡片
+  img.src = p.url;
+  frame.appendChild(img);
+  if(p.by){
+    const cr = document.createElement('div');
+    cr.className = 'photo-credit';
+    const site = p.site || 'Unsplash'; // 照片来自哪个图库（Unsplash 要求署名摄影师和 Unsplash，都带链接）
+    const a1 = document.createElement('a'); a1.href = p.byUrl || p.page; a1.textContent = p.by;
+    const a2 = document.createElement('a'); a2.href = p.siteUrl || p.page; a2.textContent = site;
+    [a1, a2].forEach(a => { a.target = '_blank'; a.rel = 'noopener'; a.addEventListener('click', e => e.stopPropagation()); });
+    cr.append('Photo by ', a1, ' on ', a2);
+    frame.appendChild(cr);
+  }
+  frame.addEventListener('click', () => openImageViewer(p.full || p.url));
+  b.appendChild(frame);
+}
+
 function addBubble(container, role, text, imageDataUrl, opts = {}){
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'ai');
   const b = document.createElement('div');
   b.className = 'bubble';
   if(opts.id) b.dataset.id = opts.id;
+  if(opts.photo) fillPhoto(b, opts.photo);
   if(imageDataUrl){
     const img = document.createElement('img');
     img.src = imageDataUrl;
@@ -800,7 +849,7 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     st.textContent = opts.action;
     holder.appendChild(st);
   }
-  if(text || imageDataUrl) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
+  if(text || imageDataUrl || opts.photo) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
   if(opts.replyTo){
     if(holder === row) row.classList.add('has-quote');
     const q = document.createElement('div');
@@ -823,8 +872,8 @@ let replyingTo = null; // 正在引用的那条消息的 id
 function findMsg(id){ return currentConv ? historyOf(currentConv).find(m => m.id === id) : null; }
 function snippetOf(m){
   if(!m) return '原消息已经不在了';
-  let t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
-  if(m.role !== 'user'){ const s = splitAction(t); t = s.speech || s.action; } // 引用框里也只放他说的话
+  let t = (m.photo ? '[照片] ' + (m.photo.desc || '') : (m.text || (m.hadImage ? '[图片]' : ''))).replace(/\s+/g, ' ');
+  if(m.role !== 'user' && !m.photo){ const s = splitAction(t); t = s.speech || s.action; } // 引用框里也只放他说的话
   return (m.role === 'user' ? '我' : (m.speaker ? speakerName(m.speaker) : contactName(currentConv))) + '：' + t;
 }
 
@@ -1018,6 +1067,11 @@ function splitAction(t){
   return { action: acts.join(' '), speech };
 }
 function bubbleForMessage(m){
+  if(m.photo){ // 照片单独一条，不拆动作
+    maybeTimeDivider(m.ts);
+    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo });
+    return;
+  }
   const thumb = thumbs[m.ts];
   let text = m.role === 'user' ? m.text : cleanStamps(m.text);
   let action = '';
@@ -1064,6 +1118,7 @@ async function syncMessages(cid){
       if(old){
         // 后端改过的旧消息：把手机里这条也换成新的
         if(old.text !== m.text){ old.text = m.text; edited = true; }
+        if(m.photo && !old.photo){ old.photo = m.photo; edited = true; }
         return;
       }
       h.push(m);
