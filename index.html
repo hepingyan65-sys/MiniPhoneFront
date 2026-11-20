@@ -166,6 +166,26 @@
   .bubble.photo-card{ cursor:pointer; font-size:12.5px; line-height:1.6;
     background: linear-gradient(160deg, rgba(157,176,154,.28), rgba(207,192,154,.12)) !important; border:1px solid var(--glass-edge); }
   .bubble.photo-card::before{ content:"📷 "; }
+  /* Alis 发的语音条：雾玻璃小长条，点一下播放，声波从左到右亮成香槟色；下面的「转文字」点开看英文原话和中文翻译 */
+  .row.stacked{ flex-direction:column; align-items:flex-start; gap:4px; }
+  .bubble.voice{ display:flex; align-items:center; gap:9px; cursor:pointer; padding:9px 13px; }
+  .bubble.voice svg{ width:15px; height:15px; flex:none; stroke: var(--lamp); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .bubble.voice .vplay-pause{ display:none; }
+  .bubble.voice.playing .vplay-play{ display:none; }
+  .bubble.voice.playing .vplay-pause{ display:block; }
+  .vbars{ display:flex; align-items:center; gap:2px; height:18px; flex:1; }
+  .vbars i{ flex:1; max-width:3px; min-width:2px; border-radius:1px; background: var(--ink-dim); opacity:.55; transition: background .2s, opacity .2s; }
+  .vbars i.on{ background: var(--lamp); opacity:1; }
+  .bubble.voice.playing .vbars i:not(.on){ animation: vbreath 1.4s ease-in-out infinite; }
+  @keyframes vbreath{ 50%{ opacity:.9; } }
+  .vdur{ font-size:12px; color: var(--ink-dim); font-variant-numeric: tabular-nums; flex:none; }
+  .bubble.voice.broken .vdur{ color:#D8A39A; }
+  .vtoggle{ font-size:11px; color: var(--lamp-dim); padding:0 4px; cursor:pointer; letter-spacing:.3px; }
+  .vtrans{ max-width:76%; font-size:12.5px; line-height:1.6; padding:8px 12px; border-radius:12px; background: var(--card); border:1px solid var(--card-line);
+    color: var(--ink); white-space:pre-wrap; word-break:break-word; cursor:pointer; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .vtrans .vtag{ color:#B9C4B4; font-style:italic; font-size:11.5px; }
+  .vtrans .zh{ color: var(--ink-dim); margin-top:5px; padding-top:5px; border-top:1px solid var(--card-line); }
+  .row.with-speaker .col .vtrans{ max-width:100%; }
 
   /* 引用：长按气泡弹出菜单，引用的原文显示在气泡下面的灰色小框里（像微信） */
   .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
@@ -709,6 +729,7 @@ function avatarFor(cid, size){
 const speakerName = (id) => (CONTACT_INFO[id] ? contactName(id) : '某人');
 function previewOf(cid, m){
   if(m.photo) return (m.role === 'user' ? '我：' : (isGroup(cid) && m.speaker ? speakerName(m.speaker) + '：' : '')) + '[照片]';
+  if(m.voice) return '[语音]';
   const t = (m.text || (m.hadImage ? '[图片]' : '')).replace(/\s+/g, ' ');
   if(m.role === 'user') return '我：' + t;
   const s = splitAction(cleanStamps(t)); // 列表里只显示他说的话；只有动作的才显示动作
@@ -810,6 +831,75 @@ function fillPhoto(b, p){
   b.appendChild(frame);
 }
 
+// Alis 发的语音：画成语音条，点一下播放 / 停下（同一时间只放一条）
+const VOICE_ICON = '<svg class="vplay-play" viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z"/></svg>' +
+  '<svg class="vplay-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>';
+let voiceNow = null; // 正在放的那条：{ b, audio }
+const voiceUrl = (id) => backendUrl.replace(/\/$/, '') + '/voice/' + encodeURIComponent(id);
+const fmtDur = (sec) => Math.max(1, Math.round(sec || 0)) + '″';
+function voiceProgress(b, frac){
+  const bars = b.querySelectorAll('.vbars i');
+  bars.forEach((x, i) => x.classList.toggle('on', frac > 0 && i < Math.ceil(frac * bars.length)));
+}
+function stopVoice(){
+  if(!voiceNow) return;
+  voiceNow.audio.pause();
+  voiceNow.b.classList.remove('playing');
+  voiceProgress(voiceNow.b, 0);
+  voiceNow = null;
+}
+function toggleVoice(b, v){
+  if(Date.now() - menuOpenedAt < 600) return; // 刚长按弹出了菜单，这一下不算点击
+  if(voiceNow && voiceNow.b === b){ stopVoice(); return; }
+  stopVoice();
+  const audio = new Audio(voiceUrl(v.id));
+  voiceNow = { b, audio };
+  b.classList.add('playing'); b.classList.remove('broken');
+  const mine = () => voiceNow && voiceNow.audio === audio;
+  audio.addEventListener('loadedmetadata', () => { if(isFinite(audio.duration)) b.querySelector('.vdur').textContent = fmtDur(audio.duration); });
+  audio.addEventListener('timeupdate', () => { if(mine() && audio.duration) voiceProgress(b, audio.currentTime / audio.duration); });
+  audio.addEventListener('ended', () => { if(mine()) stopVoice(); });
+  const fail = () => { if(!mine()) return; stopVoice(); b.classList.add('broken'); b.querySelector('.vdur').textContent = '放不出来'; };
+  audio.addEventListener('error', fail);
+  const p = audio.play();
+  if(p && p.catch) p.catch(fail);
+}
+function fillVoice(b, v){
+  b.classList.add('voice');
+  b.innerHTML = VOICE_ICON;
+  const bars = document.createElement('span');
+  bars.className = 'vbars';
+  // 声波的高低按语音编号算出来，每条都不一样，但同一条每次打开都一样
+  const n = Math.min(26, 8 + Math.round((v.dur || 5) * 0.9));
+  let seed = 0; for(const c of String(v.id)) seed = (seed * 31 + c.charCodeAt(0)) >>> 0;
+  for(let i = 0; i < n; i++){
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    const bar = document.createElement('i');
+    bar.style.height = (4 + (seed % 13)) + 'px';
+    bars.appendChild(bar);
+  }
+  const dur = document.createElement('span');
+  dur.className = 'vdur'; dur.textContent = fmtDur(v.dur);
+  b.append(bars, dur);
+  b.style.width = Math.min(220, 96 + (v.dur || 5) * 6) + 'px';
+  b.style.maxWidth = '76%';
+  b.addEventListener('click', () => toggleVoice(b, v));
+}
+// 「转文字」：英文原话（[sighs] 这种标签画成灰色斜体），下面是中文翻译
+function voiceTranscript(v){
+  const box = document.createElement('div');
+  box.className = 'vtrans';
+  const en = document.createElement('div');
+  String(v.en || '').split(/(\[[^\]]*\])/).forEach(part => {
+    if(!part) return;
+    if(/^\[[^\]]*\]$/.test(part)){ const t = document.createElement('span'); t.className = 'vtag'; t.textContent = part; en.appendChild(t); }
+    else en.appendChild(document.createTextNode(part));
+  });
+  box.appendChild(en);
+  if(v.zh && v.zh !== v.en){ const zh = document.createElement('div'); zh.className = 'zh'; zh.textContent = v.zh; box.appendChild(zh); }
+  return box;
+}
+
 function addBubble(container, role, text, imageDataUrl, opts = {}){
   const row = document.createElement('div');
   row.className = 'row ' + (role === 'user' ? 'me' : 'ai');
@@ -817,6 +907,7 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
   b.className = 'bubble';
   if(opts.id) b.dataset.id = opts.id;
   if(opts.photo) fillPhoto(b, opts.photo);
+  if(opts.voice) fillVoice(b, opts.voice);
   if(imageDataUrl){
     const img = document.createElement('img');
     img.src = imageDataUrl;
@@ -849,7 +940,21 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     st.textContent = opts.action;
     holder.appendChild(st);
   }
-  if(text || imageDataUrl || opts.photo) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
+  if(text || imageDataUrl || opts.photo || opts.voice) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
+  if(opts.voice){ // 语音条下面的「转文字」，默认收着
+    if(holder === row) row.classList.add('stacked');
+    const tg = document.createElement('div');
+    tg.className = 'vtoggle'; tg.textContent = '转文字';
+    let box = null;
+    const toggle = () => {
+      if(box){ box.remove(); box = null; tg.style.display = ''; return; }
+      box = voiceTranscript(opts.voice);
+      box.addEventListener('click', toggle);
+      tg.after(box); tg.style.display = 'none';
+    };
+    tg.addEventListener('click', toggle);
+    holder.appendChild(tg);
+  }
   if(opts.replyTo){
     if(holder === row) row.classList.add('has-quote');
     const q = document.createElement('div');
@@ -872,8 +977,8 @@ let replyingTo = null; // 正在引用的那条消息的 id
 function findMsg(id){ return currentConv ? historyOf(currentConv).find(m => m.id === id) : null; }
 function snippetOf(m){
   if(!m) return '原消息已经不在了';
-  let t = (m.photo ? '[照片] ' + (m.photo.desc || '') : (m.text || (m.hadImage ? '[图片]' : ''))).replace(/\s+/g, ' ');
-  if(m.role !== 'user' && !m.photo){ const s = splitAction(t); t = s.speech || s.action; } // 引用框里也只放他说的话
+  let t = (m.photo ? '[照片] ' + (m.photo.desc || '') : m.voice ? '[语音] ' + (m.voice.zh || '') : (m.text || (m.hadImage ? '[图片]' : ''))).replace(/\s+/g, ' ');
+  if(m.role !== 'user' && !m.photo && !m.voice){ const s = splitAction(t); t = s.speech || s.action; } // 引用框里也只放他说的话
   return (m.role === 'user' ? '我' : (m.speaker ? speakerName(m.speaker) : contactName(currentConv))) + '：' + t;
 }
 
@@ -914,7 +1019,8 @@ function openMsgMenu(b){
     menuEl.appendChild(btn);
   };
   addItem('引用', () => startReply(m));
-  if(m.text) addItem('复制', () => { if(navigator.clipboard) navigator.clipboard.writeText(m.text).catch(() => {}); });
+  const copyText = m.voice ? m.voice.en : m.text; // 语音复制的是英文原话
+  if(copyText) addItem('复制', () => { if(navigator.clipboard) navigator.clipboard.writeText(copyText).catch(() => {}); });
   document.body.appendChild(menuEl);
   // 菜单放在气泡上方，上面放不下就放下方
   const r = b.getBoundingClientRect(), mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
@@ -1072,6 +1178,11 @@ function bubbleForMessage(m){
     addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo });
     return;
   }
+  if(m.voice){ // 语音单独一条，不拆动作
+    maybeTimeDivider(m.ts);
+    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, voice: m.voice });
+    return;
+  }
   const thumb = thumbs[m.ts];
   let text = m.role === 'user' ? m.text : cleanStamps(m.text);
   let action = '';
@@ -1119,6 +1230,7 @@ async function syncMessages(cid){
         // 后端改过的旧消息：把手机里这条也换成新的
         if(old.text !== m.text){ old.text = m.text; edited = true; }
         if(m.photo && !old.photo){ old.photo = m.photo; edited = true; }
+        if(m.voice && !old.voice){ old.voice = m.voice; edited = true; }
         return;
       }
       h.push(m);
