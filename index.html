@@ -208,11 +208,27 @@
   .switch.on{ background: rgba(207,192,154,.7); }
   .switch.on::after{ transform: translateX(18px); }
   .msg-menu{
-    position:fixed; z-index:50; display:flex; gap:2px; padding:4px;
+    position:fixed; z-index:50; display:flex; flex-direction:column; gap:2px; padding:4px;
     background:#1E2A22; border:1px solid var(--glass-edge); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.5);
   }
   .msg-menu button{ background:transparent; border:none; color: var(--ink); font-size:13px; font-family:inherit; padding:7px 14px; border-radius:7px; cursor:pointer; }
   .msg-menu button:active{ background: rgba(255,255,255,.08); }
+  .msg-menu .acts{ display:flex; gap:2px; justify-content:center; }
+  /* 表情回应：菜单上面一排表情，点一下贴上，再点一下取消；＋ 打开键盘自己挑 */
+  .msg-menu .emo-row{ display:flex; gap:0; padding-bottom:3px; border-bottom:1px solid var(--card-line); }
+  .msg-menu .emo-row button{ font-size:21px; padding:5px 6px; line-height:1; }
+  .msg-menu .emo-row button.mine{ background: rgba(207,192,154,.22); }
+  .msg-menu .emo-row button.more{ font-size:18px; color: var(--ink-dim); width:34px; }
+  /* 气泡下面小小的一整排表情，按贴的先后排；点一下看是谁贴的 */
+  .row.me.stacked{ align-items:flex-end; }
+  .reacts{ max-width:76%; font-size:14px; line-height:1.3; padding:2px 7px; border-radius:11px; cursor:pointer; word-break:break-all;
+    background: var(--card); border:1px solid var(--card-line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .reacts .who{ display:block; font-size:11px; color: var(--ink-dim); padding:2px 0 1px; word-break:normal; }
+  .row.with-speaker .col .reacts{ max-width:100%; }
+  .emoji-pick{ position:fixed; z-index:60; left:0; right:0; bottom:0; display:flex; gap:8px; align-items:center;
+    padding:10px 14px calc(10px + env(safe-area-inset-bottom)); background:#1E2A22; border-top:1px solid var(--glass-edge); }
+  .emoji-pick input{ flex:1; min-width:0; font-size:16px; padding:8px 10px; border-radius:9px; border:1px solid var(--card-line); background: rgba(255,255,255,.06); color: var(--ink); font-family:inherit; }
+  .emoji-pick button{ background:transparent; border:none; color: var(--ink-dim); font-size:13px; font-family:inherit; padding:6px 4px; cursor:pointer; }
   .reply-bar{ display:flex; align-items:center; gap:8px; padding:8px 14px; border-top:1px solid var(--card-line); }
   .reply-bar .reply-text{ flex:1; min-width:0; font-size:12px; color: var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .reply-bar button{
@@ -941,6 +957,10 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     holder.appendChild(st);
   }
   if(text || imageDataUrl || opts.photo || opts.voice) holder.appendChild(b); // 只有动作、没有说话的消息，就不画空气泡
+  if(opts.reactions && opts.reactions.length && b.parentNode){
+    if(holder === row) row.classList.add('stacked');
+    holder.appendChild(reactsEl(opts.id, opts.reactions));
+  }
   if(opts.voice){ // 语音条下面的「转文字」，默认收着
     if(holder === row) row.classList.add('stacked');
     const tg = document.createElement('div');
@@ -1012,11 +1032,31 @@ function openMsgMenu(b){
   if(!m) return;
   menuEl = document.createElement('div');
   menuEl.className = 'msg-menu';
+  // 上面一排：表情回应（自己已经贴了的那几个亮一点，再点一下就是取消）
+  const emoRow = document.createElement('div');
+  emoRow.className = 'emo-row';
+  const mineSet = new Set((m.reactions || []).filter(r => r.who === 'jes').map(r => r.emoji));
+  QUICK_EMOJI.forEach(e => {
+    const btn = document.createElement('button');
+    btn.textContent = e;
+    if(mineSet.has(e)) btn.classList.add('mine');
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); closeMsgMenu(); reactTo(m, e); });
+    emoRow.appendChild(btn);
+  });
+  const more = document.createElement('button');
+  more.className = 'more'; more.textContent = '＋';
+  more.addEventListener('click', (ev) => { ev.stopPropagation(); closeMsgMenu(); openEmojiPick(m); });
+  emoRow.appendChild(more);
+  menuEl.appendChild(emoRow);
+  // 下面一排：引用 / 复制
+  const acts = document.createElement('div');
+  acts.className = 'acts';
+  menuEl.appendChild(acts);
   const addItem = (label, fn) => {
     const btn = document.createElement('button');
     btn.textContent = label;
     btn.addEventListener('click', (ev) => { ev.stopPropagation(); closeMsgMenu(); fn(); });
-    menuEl.appendChild(btn);
+    acts.appendChild(btn);
   };
   addItem('引用', () => startReply(m));
   const copyText = m.voice ? m.voice.en : m.text; // 语音复制的是英文原话
@@ -1030,6 +1070,92 @@ function openMsgMenu(b){
   menuEl.style.top = top + 'px';
   menuEl.style.left = left + 'px';
   menuOpenedAt = Date.now();
+}
+
+/* ---------- 表情回应 ---------- */
+const QUICK_EMOJI = ['❤️', '😂', '🥹', '😭', '🥺', '👌🏻']; // 长按菜单里那一排；想换就改这里，别的表情点 ＋ 从键盘挑
+
+// 气泡下面那一小排表情：按贴的先后排开，点一下展开看是谁贴的
+function reactsEl(id, reactions){
+  const el = document.createElement('div');
+  el.className = 'reacts';
+  el.dataset.for = id;
+  el.textContent = reactions.map(r => r.emoji).join('');
+  el.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    const old = el.querySelector('.who');
+    if(old){ old.remove(); return; }
+    const w = document.createElement('span');
+    w.className = 'who';
+    w.textContent = reactions.map(r => (r.who === 'jes' ? '我' : speakerName(r.who)) + ' ' + r.emoji).join(' · ');
+    el.appendChild(w);
+  });
+  return el;
+}
+// 某条消息的表情变了：只换掉它下面那一排，不重画整个聊天（不然会跳回最底下）
+function updateReacts(m){
+  const b = [...chatEl.querySelectorAll('.bubble')].find(x => x.dataset.id === m.id);
+  if(!b) return;
+  const holder = b.parentNode;
+  const old = [...holder.querySelectorAll('.reacts')].find(x => x.dataset.for === m.id);
+  if(!m.reactions || !m.reactions.length){ if(old) old.remove(); return; }
+  const el = reactsEl(m.id, m.reactions);
+  if(old) old.replaceWith(el);
+  else{
+    if(holder.classList.contains('row')) holder.classList.add('stacked');
+    b.after(el);
+  }
+}
+// 贴上 / 取消：先在手机上改好，再告诉后端；后端没接住就改回去
+async function reactTo(m, emoji){
+  const cid = currentConv;
+  if(!cid || !backendUrl) return;
+  const before = m.reactions ? m.reactions.slice() : undefined;
+  const list = (m.reactions || []).slice();
+  const i = list.findIndex(r => r.who === 'jes' && r.emoji === emoji);
+  if(i >= 0) list.splice(i, 1); else list.push({ who: 'jes', emoji });
+  m.reactions = list.length ? list : undefined;
+  updateReacts(m);
+  if(navigator.vibrate) navigator.vibrate(10);
+  try{
+    const data = await api('/react', { method: 'POST', body: { conv: cid, id: m.id, emoji } });
+    m.reactions = data.message.reactions;
+    save.history(cid);
+  }catch(e){
+    m.reactions = before;
+    addNote('表情没贴上：' + e.message);
+  }
+  if(cid === currentConv) updateReacts(m);
+}
+// 点 ＋：底下弹出一个小输入框，切到表情键盘挑一个，挑到就贴上
+let pickEl = null;
+function closeEmojiPick(){ if(pickEl){ pickEl.remove(); pickEl = null; } }
+function openEmojiPick(m){
+  closeEmojiPick();
+  pickEl = document.createElement('div');
+  pickEl.className = 'emoji-pick';
+  const inp = document.createElement('input');
+  inp.placeholder = '切到表情键盘，挑一个';
+  inp.setAttribute('enterkeyhint', 'done');
+  const cancel = document.createElement('button');
+  cancel.textContent = '取消';
+  cancel.addEventListener('click', closeEmojiPick);
+  inp.addEventListener('input', () => {
+    const e = firstEmoji(inp.value);
+    if(e){ closeEmojiPick(); reactTo(m, e); }
+    else inp.value = ''; // 打的不是表情就清掉
+  });
+  inp.addEventListener('blur', () => setTimeout(closeEmojiPick, 150));
+  pickEl.appendChild(inp); pickEl.appendChild(cancel);
+  document.body.appendChild(pickEl);
+  inp.focus();
+}
+// 从一段文字里拿出第一个表情（👌🏻 这种带肤色的、👨‍👩‍👧 这种拼起来的都算一个）
+function firstEmoji(t){
+  const parts = typeof Intl !== 'undefined' && Intl.Segmenter
+    ? [...new Intl.Segmenter().segment(t)].map(x => x.segment)
+    : [...t];
+  return parts.find(g => /\p{Extended_Pictographic}/u.test(g)) || '';
 }
 
 let pressTimer = null, pressStart = null, pressOpened = false;
@@ -1175,12 +1301,12 @@ function splitAction(t){
 function bubbleForMessage(m){
   if(m.photo){ // 照片单独一条，不拆动作
     maybeTimeDivider(m.ts);
-    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo });
+    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo, reactions: m.reactions });
     return;
   }
   if(m.voice){ // 语音单独一条，不拆动作
     maybeTimeDivider(m.ts);
-    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, voice: m.voice });
+    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, voice: m.voice, reactions: m.reactions });
     return;
   }
   const thumb = thumbs[m.ts];
@@ -1190,7 +1316,7 @@ function bubbleForMessage(m){
   if(!text && !action && !m.hadImage && !thumb) return; // 只有动作、又关掉了显示：这条就不出现
   maybeTimeDivider(m.ts);
   text = text || (m.hadImage && !thumb ? '[图片]' : '');
-  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, action });
+  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, action, reactions: m.reactions });
 }
 
 function renderChat(){
@@ -1218,7 +1344,7 @@ async function syncMessages(cid){
     const after = h.length ? h[h.length - 1].ts : 0;
     const data = await api('/messages?conv=' + encodeURIComponent(cid) + '&after=' + after, { timeout: 30000 });
     updateStatus(cid, data.status);
-    let added = false, edited = false;
+    let added = false, edited = false, reacted = false;
     // 后端删掉的消息：手机里的副本也删掉
     const removed = Array.isArray(data.removed) ? data.removed : [];
     for(let i = h.length - 1; i >= 0; i--){
@@ -1231,6 +1357,12 @@ async function syncMessages(cid){
         if(old.text !== m.text){ old.text = m.text; edited = true; }
         if(m.photo && !old.photo){ old.photo = m.photo; edited = true; }
         if(m.voice && !old.voice){ old.voice = m.voice; edited = true; }
+        // 表情变了：只换掉那一排，不重画整个聊天
+        if(JSON.stringify(old.reactions || []) !== JSON.stringify(m.reactions || [])){
+          old.reactions = m.reactions;
+          reacted = true;
+          if(cid === currentConv) updateReacts(old);
+        }
         return;
       }
       h.push(m);
@@ -1242,6 +1374,7 @@ async function syncMessages(cid){
     });
     if(edited && !added){ save.history(cid); if(cid === currentConv) renderChat(); renderContacts(); }
     else if(edited && cid === currentConv) renderChat();
+    if(reacted && !added && !edited) save.history(cid);
     if(added){
       save.history(cid);
       if(isViewing(cid)) markRead(cid);
