@@ -90,7 +90,7 @@
   .contacts-list{ flex:1; overflow-y:auto; padding: 10px 12px 20px; display:flex; flex-direction:column; gap:8px; }
   .contact-row{ display:flex; align-items:center; gap:12px; padding:11px 12px; cursor:pointer; flex-shrink:0;
     border:1px solid var(--glass-edge); border-radius:18px; background: var(--card); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-  .contact-row:active{ background: rgba(255,255,255,.04); }
+  .contact-row:active{ background: rgba(255,255,255,.07); }
   .contact-row img{ width:48px; height:48px; border-radius:50%; object-fit:cover; flex-shrink:0; background: var(--placeholder); box-shadow: 0 0 0 1px var(--glass-edge); }
   .contact-row .c-main{ flex:1; min-width:0; }
   .contact-row .c-top{ display:flex; align-items:baseline; gap:8px; }
@@ -193,6 +193,16 @@
 
   /* 引用：长按气泡弹出菜单，引用的原文显示在气泡下面的灰色小框里（像微信） */
   .bubble{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+
+  /* 按下去的反馈：按下时迅速缩一点，松手时带一点回弹弹回来（取代 iPhone 自带的灰色点击高光） */
+  *{ -webkit-tap-highlight-color: transparent; }
+  button, .contact-row, .post .p-comment{ transition: transform .32s cubic-bezier(.3,1.6,.5,1), background .15s; }
+  button:active{ transform: scale(.92); transition-duration: .08s; }
+  .contact-row:active{ transform: scale(.97); transition-duration: .1s; }
+  .contact-row.not-yet:active{ transform:none; }
+  /* 长按消息：按住时气泡慢慢往里收，菜单弹出那一刻（或中途松手）"啵"地弹回 */
+  .bubble, .mini-av{ transition: transform .34s cubic-bezier(.3,1.6,.5,1); }
+  .bubble.pressing, .mini-av.pressing{ transform: scale(.93); transition: transform .33s ease-out; }
   .bubble.flash{ box-shadow: 0 0 0 2px var(--lamp) !important; transition: box-shadow .3s; }
   .row.has-quote{ flex-direction:column; align-items:flex-start; gap:4px; }
   .row.me.has-quote{ align-items:flex-end; }
@@ -1262,7 +1272,15 @@ function firstEmoji(t){
 }
 
 let pressTimer = null, pressStart = null, pressOpened = false;
-const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+let shrinkTimer = null, pressEl = null; // 长按时正在往里收的那个气泡/头像
+function startShrink(el){ // 按住 0.12 秒还没动才开始收，免得只是滑聊天时气泡也跟着缩
+  pressEl = el;
+  shrinkTimer = setTimeout(() => el.classList.add('pressing'), 120);
+}
+function releaseShrink(){ clearTimeout(shrinkTimer); shrinkTimer = null; if(pressEl){ pressEl.classList.remove('pressing'); pressEl = null; } }
+const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; releaseShrink(); };
+// iPhone 的 Safari 要页面上有人监听"手指按下"，按钮按下去的样子（:active）才会及时出现
+document.addEventListener('touchstart', () => {}, { passive: true });
 chatEl.addEventListener('touchstart', (e) => {
   // 群里长按头像：@ 他
   const av = e.target.closest('.mini-av');
@@ -1270,7 +1288,8 @@ chatEl.addEventListener('touchstart', (e) => {
     const t = e.touches[0];
     pressStart = { x: t.clientX, y: t.clientY };
     pressOpened = false;
-    pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; insertMention(av.dataset.speaker); }, 450);
+    startShrink(av);
+    pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; releaseShrink(); insertMention(av.dataset.speaker); }, 450);
     return;
   }
   const b = e.target.closest('.bubble');
@@ -1278,7 +1297,8 @@ chatEl.addEventListener('touchstart', (e) => {
   const t = e.touches[0];
   pressStart = { x: t.clientX, y: t.clientY };
   pressOpened = false;
-  pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; openMsgMenu(b); }, 450);
+  startShrink(b);
+  pressTimer = setTimeout(() => { pressTimer = null; pressOpened = true; releaseShrink(); openMsgMenu(b); }, 450);
 }, { passive: true });
 // 长按弹出菜单后松手：拦下松手带出来的那次"点击"，不然按得久一点菜单会刚弹出就被关掉
 chatEl.addEventListener('touchend', (e) => { if(pressOpened){ e.preventDefault(); pressOpened = false; } });
