@@ -44,7 +44,7 @@
   @media (max-width: 480px){
     body{ padding:0; }
     .phone{
-      width:100vw; height:100dvh; border-radius:0; padding:0;
+      width:100vw; height: var(--app-h, 100dvh); border-radius:0; padding:0; /* 键盘弹出时 JS 把 --app-h 设成看得见的高度 */
       padding-top: env(safe-area-inset-top, 0px);
       /* 底部安全区不在这里留了：交给下面的 tabbar 自己往下铺，避免留两遍出现一条空白 */
     }
@@ -370,6 +370,8 @@
   /* 细线图标（SVG） */
   svg.ln{ fill:none; stroke:currentColor; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round; }
   .tab-btn.active{ color: var(--lamp); }
+  /* 键盘弹出时：收起底部 Tab 栏，让输入框直接贴在键盘上面（像原生聊天 App） */
+  body.kb-open .tabbar{ display:none; }
 </style>
 </head>
 <body>
@@ -1279,6 +1281,34 @@ function startShrink(el){ // 按住 0.12 秒还没动才开始收，免得只是
 }
 function releaseShrink(){ clearTimeout(shrinkTimer); shrinkTimer = null; if(pressEl){ pressEl.classList.remove('pressing'); pressEl = null; } }
 const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; releaseShrink(); };
+/* ---------- 键盘弹出时贴合 ---------- */
+// iPhone 的 Safari 弹出键盘时不会把页面变矮，只是把键盘盖上去、再把页面往上推，
+// 于是底部的 Tab 栏、给 Home 条留的空位和黑色底色都露出来。
+// 这里量出"现在实际看得见的区域"（visualViewport）有多高，键盘弹出时把整个 App 缩到这么高、摆回顶上。
+const vv = window.visualViewport;
+let fullH = vv ? Math.max(vv.height, window.innerHeight) : 0; // 没开键盘时看得见的高度
+const touchPhone = window.matchMedia ? matchMedia('(pointer: coarse)').matches : false; // 只在触屏手机上收 Tab 栏
+const isTyping = () => { const a = document.activeElement; return !!a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !/^(file|checkbox|radio|button|submit)$/.test(a.type))); };
+function fitKeyboard(){
+  if(!vv) return;
+  const chatAtBottom = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 40;
+  if(!isTyping()) fullH = Math.max(vv.height, window.innerHeight);
+  const typing = isTyping();
+  const open = typing && fullH - vv.height > 120; // 看得见的区域少了一大截：键盘出来了
+  document.body.classList.toggle('kb-open', typing && touchPhone); // 打字时 Tab 栏一直收着，不跟着键盘升降闪来闪去
+  if(open) document.documentElement.style.setProperty('--app-h', vv.height + 'px');
+  else document.documentElement.style.removeProperty('--app-h');
+  window.scrollTo(0, 0); // 页面被推上去的话，摆回顶上
+  if(chatAtBottom) chatEl.scrollTop = chatEl.scrollHeight; // 原来在看最新消息：键盘弹起后还停在最底下
+}
+if(vv){
+  vv.addEventListener('resize', fitKeyboard);
+  vv.addEventListener('scroll', () => { if(document.body.classList.contains('kb-open') && vv.offsetTop > 0) window.scrollTo(0, 0); });
+  document.addEventListener('focusin', () => { if(isTyping() && touchPhone) document.body.classList.add('kb-open'); setTimeout(fitKeyboard, 50); });
+  // 收起键盘：有报告说 iOS 26 收起后页面会停在被推上去的位置，所以过一会儿再摆正、再量一次
+  document.addEventListener('focusout', () => { setTimeout(fitKeyboard, 50); setTimeout(fitKeyboard, 400); });
+}
+
 // iPhone 的 Safari 要页面上有人监听"手指按下"，按钮按下去的样子（:active）才会及时出现
 document.addEventListener('touchstart', () => {}, { passive: true });
 chatEl.addEventListener('touchstart', (e) => {
