@@ -1296,19 +1296,21 @@ function fitKeyboard(){
   if(!isTyping()) fullH = Math.max(vv.height, window.innerHeight);
   const typing = isTyping();
   const open = typing && fullH - vv.height > 120; // 看得见的区域少了一大截：键盘出来了
-  document.body.classList.toggle('kb-open', typing && touchPhone); // 打字时 Tab 栏一直收着，不跟着键盘升降闪来闪去
+  // 收 Tab 栏和缩 App 放在同一刻（键盘真的升起来、量到高度变了才做），免得先掉一截再弹回来
+  document.body.classList.toggle('kb-open', open && touchPhone);
   window.scrollTo(0, 0); // 页面被推上去的话，摆回顶上
   const root = document.documentElement.style;
   if(open){ root.setProperty('--app-h', vv.height + 'px'); root.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px'); }
   else { root.removeProperty('--app-h'); root.removeProperty('--app-top'); }
   if(chatAtBottom) chatEl.scrollTop = chatEl.scrollHeight; // 原来在看最新消息：键盘弹起后还停在最底下
+  if(open) alignCommentAnchor(); // 朋友圈：正在评论的那条挪到评论框正上方
 }
 if(vv){
   vv.addEventListener('resize', fitKeyboard);
   vv.addEventListener('scroll', () => { // 键盘开着时 iOS 又挪了看得见的区域：App 跟着对准
     if(document.documentElement.style.getPropertyValue('--app-h')) document.documentElement.style.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px');
   });
-  document.addEventListener('focusin', () => { if(isTyping() && touchPhone) document.body.classList.add('kb-open'); setTimeout(fitKeyboard, 50); });
+  document.addEventListener('focusin', () => { setTimeout(fitKeyboard, 50); });
   // 收起键盘：有报告说 iOS 26 收起后页面会停在被推上去的位置，所以过一会儿再摆正、再量一次
   document.addEventListener('focusout', () => { setTimeout(fitKeyboard, 50); setTimeout(fitKeyboard, 400); });
 }
@@ -1730,7 +1732,7 @@ function renderFeed(){
       btns.appendChild(lb);
     }
     const cb = document.createElement('button'); cb.className = 'p-like-btn'; cb.innerHTML = COMMENT_SVG; cb.title = '评论';
-    cb.addEventListener('click', () => openCommentBar(p.id, null));
+    cb.addEventListener('click', () => openCommentBar(p.id, null, cb.closest('.post') || cb));
     btns.appendChild(cb);
     foot.appendChild(btns);
     main.appendChild(foot);
@@ -1746,7 +1748,7 @@ function renderFeed(){
         const cs = document.createElement('div'); cs.className = 'p-comments';
         comments.forEach(c => {
           const row = document.createElement('div'); row.className = 'p-comment';
-          if(c.who !== 'jes') row.addEventListener('click', () => openCommentBar(p.id, c.who));
+          if(c.who !== 'jes') row.addEventListener('click', () => openCommentBar(p.id, c.who, row));
           const who = document.createElement('b'); who.textContent = feedName(c.who);
           row.appendChild(who);
           if(c.to){
@@ -1813,13 +1815,23 @@ const feedCbar = document.getElementById('feedCbar');
 const feedCInput = document.getElementById('feedCInput');
 const feedCSend = document.getElementById('feedCSend');
 let commentTarget = null;
-function openCommentBar(postId, to){
+let commentAnchor = null; // 正在评论的那条朋友圈（回复某人时是那条评论）：键盘升起后把它挪到评论框正上方
+function openCommentBar(postId, to, anchor){
   commentTarget = { postId, to };
+  commentAnchor = anchor || null;
   feedCInput.placeholder = to ? '回复 ' + feedName(to) + '：' : '评论';
   feedCbar.classList.add('open');
   feedCInput.focus();
+  if(document.body.classList.contains('kb-open')) setTimeout(alignCommentAnchor, 30); // 键盘本来就开着：直接对齐这一条
 }
-function closeCommentBar(){ commentTarget = null; feedCInput.value = ''; feedCbar.classList.remove('open'); }
+function closeCommentBar(){ commentTarget = null; commentAnchor = null; feedCInput.value = ''; feedCbar.classList.remove('open'); }
+// 像微信：把正在评论的那条的底部平滑挪到评论框正上方，留一点空
+function alignCommentAnchor(){
+  if(!commentAnchor || !commentAnchor.isConnected || !feedCbar.classList.contains('open')) return;
+  const body = document.getElementById('momentsBody');
+  const delta = commentAnchor.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom + 10;
+  if(Math.abs(delta) > 2) body.scrollBy({ top: delta, behavior: 'smooth' });
+}
 document.getElementById('feedCClose').addEventListener('click', closeCommentBar);
 async function sendComment(){
   const text = feedCInput.value.trim();
