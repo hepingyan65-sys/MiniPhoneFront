@@ -371,6 +371,14 @@
   /* 细线图标（SVG） */
   svg.ln{ fill:none; stroke:currentColor; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round; }
   .tab-btn.active{ color: var(--lamp); }
+  /* 底栏的灯：选中的 Tab 后面垫一块淡淡的香槟色光晕，切换时带一点回弹滑过去（位置由 JS 的 placeLamp() 算） */
+  .tabbar{ position:relative; }
+  .tab-btn{ z-index:1; }
+  .tab-lamp{ position:absolute; top:5px; bottom:5px; left:0; width:0; border-radius:20px; pointer-events:none;
+    background: radial-gradient(ellipse at 50% 55%, rgba(207,192,154,.20), rgba(207,192,154,.06) 72%);
+    box-shadow: inset 0 0 0 1px rgba(207,192,154,.16), 0 0 16px rgba(207,192,154,.10);
+    transition: transform .5s cubic-bezier(.3,1.35,.5,1), width .5s cubic-bezier(.3,1.35,.5,1); }
+  .tab-lamp.instant{ transition:none; }
   /* 键盘弹出时：收起底部 Tab 栏，让输入框直接贴在键盘上面（像原生聊天 App） */
   body.kb-open .tabbar{ display:none; }
 </style>
@@ -488,6 +496,7 @@
     </div>
 
     <div class="tabbar">
+      <div class="tab-lamp instant" id="tabLamp" aria-hidden="true"></div>
       <button class="tab-btn" data-tab="moments"><span class="icon"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6"/><path d="M17.8 3.4a1.9 1.9 0 0 1 2.8 2.8l-7.9 7.9-3.4.7.7-3.4z"/></svg></span>动态<span class="tab-dot" id="feedTabDot"></span></button>
       <button class="tab-btn active" data-tab="chat"><span class="icon"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3.5"/><path d="M4.5 7.5l7.5 5.5 7.5-5.5"/></svg></span>信息<span class="tab-dot" id="chatTabDot"></span></button>
       <button class="tab-btn" data-tab="settings"><span class="icon"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9.5M18.5 7.5H20M4 16.5h2.5M11.5 16.5H20"/><circle cx="16" cy="7.5" r="2.3"/><circle cx="9" cy="16.5" r="2.3"/></svg></span>设置</button>
@@ -614,16 +623,37 @@ function updateBg(){
   const inChat = !!currentConv && document.getElementById('panel-chat').classList.contains('active');
   document.querySelector('.screen').classList.toggle('in-chat', inChat);
 }
+// 底栏的灯：挪到选中的 Tab 后面（animate = false 时直接到位，比如刚打开、底栏刚重新出现）
+const tabLamp = document.getElementById('tabLamp');
+function placeLamp(animate){
+  const b = document.querySelector('.tab-btn.active');
+  if(!b || !b.offsetWidth) return; // 底栏收着（打字时）：等它回来再摆
+  tabLamp.classList.toggle('instant', !animate);
+  tabLamp.style.width = (b.offsetWidth - 12) + 'px';
+  tabLamp.style.transform = 'translateX(' + (b.offsetLeft + 6) + 'px)';
+}
+placeLamp(false);
+if(window.ResizeObserver) new ResizeObserver(() => placeLamp(false)).observe(document.querySelector('.tabbar')); // 屏幕变了、底栏重新出现：重新摆
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const wasActive = btn.classList.contains('active');
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    const panel = document.getElementById('panel-' + btn.dataset.tab);
+    panel.classList.add('active');
+    placeLamp(true);
+    // 换了 Tab：新页面从透明、略低一点的地方轻轻浮上来（不左右滑，左右滑留给推门进聊天）
+    if(!wasActive && panel.animate && !(reduceMotion && reduceMotion.matches)){
+      panel.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 240, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    }
+    screenEl.style.setProperty('--push-ms', '300ms'); // 背景的模糊程度跟着一起变
     updateBg();
     if(btn.dataset.tab === 'settings') loadMemories();
-    if(btn.dataset.tab === 'moments'){ renderFeed(); updateFeedDot(); syncFeed(); }
+    if(btn.dataset.tab === 'moments'){
+      if(wasActive){ document.getElementById('momentsBody').scrollTo({ top: 0, behavior: 'smooth' }); syncFeed(); } // 再点一次「动态」：平滑回到最上面
+      else { renderFeed(); updateFeedDot(); syncFeed(); }
+    }
     if(btn.dataset.tab === 'chat'){
       if(wasActive) closeConv(); // 已经在「信息」里再点一下，回到联系人列表（像微信）
       else if(currentConv){ markRead(currentConv); renderContacts(); }
