@@ -1307,8 +1307,14 @@ function fitKeyboard(){
 }
 if(vv){
   vv.addEventListener('resize', fitKeyboard);
-  vv.addEventListener('scroll', () => { // 键盘开着时 iOS 又挪了看得见的区域：App 跟着对准
-    if(document.documentElement.style.getPropertyValue('--app-h')) document.documentElement.style.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px');
+  // 键盘开着时 iOS 又挪了看得见的区域：等它停下来（0.15 秒没再挪）再对准一次。
+  // 不紧跟着挪：键盘升起的动画里 iOS 会临时乱挪几下，紧跟着挪 App 会被推下去一瞬间（上面露出一块黑）
+  let vvSettle = null;
+  vv.addEventListener('scroll', () => {
+    clearTimeout(vvSettle);
+    vvSettle = setTimeout(() => {
+      if(document.documentElement.style.getPropertyValue('--app-h')) document.documentElement.style.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px');
+    }, 150);
   });
   document.addEventListener('focusin', () => { setTimeout(fitKeyboard, 50); });
   // 收起键盘：有报告说 iOS 26 收起后页面会停在被推上去的位置，所以过一会儿再摆正、再量一次
