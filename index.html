@@ -59,7 +59,7 @@
     content:''; position:absolute; inset:0; z-index:-2;
     background: url('bg.jpg') center 60% / cover no-repeat;
     opacity:.8; filter: blur(4px) saturate(.9) brightness(.72); transform: scale(1.03);
-    transition: filter .3s, transform .3s;
+    transition: filter .36s, transform .36s; /* 和推门进聊天的动画一样长 */
   }
   .screen.in-chat::before{ filter: saturate(.95) brightness(.9); transform:none; }
   /* 上下各压一层深色，让标题和输入框的字看得清 */
@@ -388,7 +388,7 @@
       <!-- 信息 -->
       <div class="panel active" id="panel-chat">
        <!-- 联系人列表：点进去才是聊天 -->
-       <div id="contactsView" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+       <div id="contactsView" style="display:flex; flex-direction:column; position:absolute; inset:0;">
         <div class="header"><div class="plain-title">Messages</div></div>
         <div class="contacts-list" id="contactsList"></div>
        </div>
@@ -408,7 +408,7 @@
         </div>
        </div>
        <!-- 和某个人的聊天 -->
-       <div id="convView" style="display:none; flex-direction:column; flex:1; min-height:0;">
+       <div id="convView" style="display:none; flex-direction:column; position:absolute; inset:0;">
         <div class="header">
           <button class="back-btn" id="backBtn" aria-label="返回">‹</button>
           <div id="convAvatarBox" style="display:flex;"></div>
@@ -800,10 +800,10 @@ function openConv(cid){
   av.classList.add('avatar');
   convAvatarBox.appendChild(av);
   renderStatus();
-  contactsView.style.display = 'none';
-  convView.style.display = 'flex';
-  updateBg();
+  convView.style.display = 'flex'; // 先显示出来才能滚到最底下；联系人列表交给 pushView 淡出
   renderChat();
+  pushView(convView, contactsView, true);
+  updateBg();
   markRead(cid);
   renderContacts();
   syncMessages(cid);
@@ -812,10 +812,36 @@ function closeConv(){
   if(!currentConv) return;
   closeMsgMenu();
   currentConv = null;
-  convView.style.display = 'none';
-  updateBg();
-  contactsView.style.display = 'flex';
   renderContacts();
+  pushView(contactsView, convView, false);
+  updateBg();
+}
+// 推门进聊天：聊天页从右边滑进来、慢慢显现，联系人列表往左退一点、淡出；返回时反过来。
+// 两层都是半透明的雾玻璃，所以一边滑一边淡，免得滑到一半两层叠在一起看
+const PUSH_MS = 360, PUSH_EASE = 'cubic-bezier(.32,.72,0,1)'; // 像 iOS 原生翻页：起步快，慢慢停稳
+const reduceMotion = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+let pushAnims = [];
+function pushView(entering, leaving, forward){
+  pushAnims.forEach(a => a.cancel()); // 连点、点进去马上返回：打断上一段，从这一段接着来
+  pushAnims = [];
+  [entering, leaving].forEach(el => { el.style.zIndex = ''; el.style.pointerEvents = ''; });
+  entering.style.display = 'flex';
+  if(!entering.animate || (reduceMotion && reduceMotion.matches)){ leaving.style.display = 'none'; return; }
+  const front = forward ? entering : leaving; // 聊天页永远在上面
+  const back = forward ? leaving : entering;
+  front.style.zIndex = 2; back.style.zIndex = 1;
+  leaving.style.pointerEvents = 'none';
+  const out = { transform: 'translateX(100%)', opacity: 0 }, inn = { transform: 'translateX(0)', opacity: 1 };
+  const behind = { transform: 'translateX(-28%)', opacity: 0 };
+  const opt = { duration: PUSH_MS, easing: PUSH_EASE };
+  const a1 = front.animate(forward ? [out, inn] : [inn, out], opt);
+  const a2 = back.animate(forward ? [inn, behind] : [behind, inn], opt);
+  pushAnims = [a1, a2];
+  a1.onfinish = () => {
+    leaving.style.display = 'none';
+    [entering, leaving].forEach(el => { el.style.zIndex = ''; el.style.pointerEvents = ''; });
+    pushAnims = [];
+  };
 }
 document.getElementById('backBtn').addEventListener('click', closeConv);
 
