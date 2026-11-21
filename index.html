@@ -42,9 +42,10 @@
     display:flex; flex-direction:column; position:relative;
   }
   @media (max-width: 480px){
-    body{ padding:0; }
+    body{ padding:0; align-items:flex-start; } /* 手机上贴着顶部摆，不上下居中（键盘弹起 App 变矮时不会被挪到中间） */
     .phone{
       width:100vw; height: var(--app-h, 100dvh); border-radius:0; padding:0; /* 键盘弹出时 JS 把 --app-h 设成看得见的高度 */
+      top: var(--app-top, 0px); /* iOS 把看得见的区域往下挪了多少，App 就跟着挪多少 */
       padding-top: env(safe-area-inset-top, 0px);
       /* 底部安全区不在这里留了：交给下面的 tabbar 自己往下铺，避免留两遍出现一条空白 */
     }
@@ -1296,14 +1297,17 @@ function fitKeyboard(){
   const typing = isTyping();
   const open = typing && fullH - vv.height > 120; // 看得见的区域少了一大截：键盘出来了
   document.body.classList.toggle('kb-open', typing && touchPhone); // 打字时 Tab 栏一直收着，不跟着键盘升降闪来闪去
-  if(open) document.documentElement.style.setProperty('--app-h', vv.height + 'px');
-  else document.documentElement.style.removeProperty('--app-h');
   window.scrollTo(0, 0); // 页面被推上去的话，摆回顶上
+  const root = document.documentElement.style;
+  if(open){ root.setProperty('--app-h', vv.height + 'px'); root.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px'); }
+  else { root.removeProperty('--app-h'); root.removeProperty('--app-top'); }
   if(chatAtBottom) chatEl.scrollTop = chatEl.scrollHeight; // 原来在看最新消息：键盘弹起后还停在最底下
 }
 if(vv){
   vv.addEventListener('resize', fitKeyboard);
-  vv.addEventListener('scroll', () => { if(document.body.classList.contains('kb-open') && vv.offsetTop > 0) window.scrollTo(0, 0); });
+  vv.addEventListener('scroll', () => { // 键盘开着时 iOS 又挪了看得见的区域：App 跟着对准
+    if(document.documentElement.style.getPropertyValue('--app-h')) document.documentElement.style.setProperty('--app-top', Math.max(0, vv.offsetTop) + 'px');
+  });
   document.addEventListener('focusin', () => { if(isTyping() && touchPhone) document.body.classList.add('kb-open'); setTimeout(fitKeyboard, 50); });
   // 收起键盘：有报告说 iOS 26 收起后页面会停在被推上去的位置，所以过一会儿再摆正、再量一次
   document.addEventListener('focusout', () => { setTimeout(fitKeyboard, 50); setTimeout(fitKeyboard, 400); });
