@@ -54,14 +54,18 @@
     flex:1; border-radius:26px; overflow:hidden; display:flex; flex-direction:column; position:relative;
     background: var(--sky-top); isolation:isolate;
   }
-  /* 背景图 bg.jpg：主页（信息列表、朋友圈、设置）微微虚化压暗；点进聊天变清楚 */
+  /* 背景图 bg.jpg：主页（信息列表、朋友圈、设置）微微虚化压暗；点进聊天变清楚。
+     模糊程度放在变量里：右滑返回时 JS 按拖了多少直接改变量，背景跟着手指一点点变（数值和 JS 的 bgLook() 一致） */
+  .screen{ --bg-filter: blur(4px) saturate(.9) brightness(.72); --bg-scale: scale(1.03); }
+  .screen.in-chat{ --bg-filter: blur(0px) saturate(.95) brightness(.9); --bg-scale: scale(1); }
   .screen::before{
     content:''; position:absolute; inset:0; z-index:-2;
     background: url('bg.jpg') center 60% / cover no-repeat;
-    opacity:.8; filter: blur(4px) saturate(.9) brightness(.72); transform: scale(1.03);
-    transition: filter .36s, transform .36s; /* 和推门进聊天的动画一样长 */
+    opacity:.8; filter: var(--bg-filter); transform: var(--bg-scale);
+    /* 时间和曲线跟推门动画一样（pushView 每次会设好 --push-ms） */
+    transition: filter var(--push-ms, .36s) cubic-bezier(.32,.72,0,1), transform var(--push-ms, .36s) cubic-bezier(.32,.72,0,1);
   }
-  .screen.in-chat::before{ filter: saturate(.95) brightness(.9); transform:none; }
+  .screen.dragging::before{ transition:none; } /* 手指拖着的时候背景直接跟手，不慢半拍 */
   /* 上下各压一层深色，让标题和输入框的字看得清 */
   .screen::after{
     content:''; position:absolute; inset:0; z-index:-1;
@@ -821,6 +825,7 @@ function closeConv(fromDrag = false){
 const PUSH_MS = 360, PUSH_EASE = 'cubic-bezier(.32,.72,0,1)'; // 像 iOS 原生翻页：起步快，慢慢停稳
 const reduceMotion = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 let pushAnims = [];
+const screenEl = document.querySelector('.screen');
 // fromDrag：右滑返回时手指松开，从两层现在的位置接着播（剩下的路越短，播得越快）
 function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   pushAnims.forEach(a => a.cancel()); // 连点、点进去马上返回：打断上一段，从这一段接着来
@@ -831,6 +836,11 @@ function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   const nowB = { transform: back.style.transform || 'translateX(0)', opacity: back.style.opacity || 1 };
   if(fromDrag) remain = Math.max(0, Math.min(1, (parseFloat(front.style.transform.replace(/[^\d.-]/g, '')) || 0) / (front.offsetWidth || 1)));
   [entering, leaving].forEach(el => { el.style.zIndex = ''; el.style.pointerEvents = ''; el.style.transform = ''; el.style.opacity = ''; });
+  // 背景交还给 CSS：从拖到的那个模糊程度接着变到终点，和页面同时停稳
+  screenEl.style.setProperty('--push-ms', PUSH_MS + 'ms');
+  screenEl.classList.remove('dragging');
+  screenEl.style.removeProperty('--bg-filter');
+  screenEl.style.removeProperty('--bg-scale');
   entering.style.display = 'flex';
   if(!entering.animate || (reduceMotion && reduceMotion.matches)){ leaving.style.display = 'none'; return; }
   front.style.zIndex = 2; back.style.zIndex = 1;
@@ -839,6 +849,7 @@ function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   const behind = { transform: 'translateX(-28%)', opacity: 0 };
   let ms = PUSH_MS;
   if(fromDrag) ms = Math.max(160, PUSH_MS * (forward ? remain : 1 - remain)); // 弹回：剩下的是已经拖出去的那段
+  screenEl.style.setProperty('--push-ms', ms + 'ms'); // 背景变完的时间也跟这一段动画一样长
   const opt = { duration: ms, easing: PUSH_EASE };
   const a1 = front.animate(fromDrag ? [nowF, forward ? inn : out] : (forward ? [out, inn] : [inn, out]), opt);
   const a2 = back.animate(fromDrag ? [nowB, forward ? behind : inn] : (forward ? [inn, behind] : [behind, inn]), opt);
@@ -853,6 +864,11 @@ document.getElementById('backBtn').addEventListener('click', () => closeConv());
 
 // 从左边缘往右拖：聊天页跟着手指走，松手时拖过一半（或甩得够快）就退回联系人列表，不够就弹回来
 const EDGE_PX = 28;
+// 背景的样子：f = 0 是聊天里（清楚），f = 1 是联系人列表（模糊）。数值和 CSS 里 .screen / .screen.in-chat 一致
+function bgLook(f){
+  screenEl.style.setProperty('--bg-filter', 'blur(' + (4 * f).toFixed(2) + 'px) saturate(' + (.95 - .05 * f).toFixed(3) + ') brightness(' + (.9 - .18 * f).toFixed(3) + ')');
+  screenEl.style.setProperty('--bg-scale', 'scale(' + (1 + .03 * f).toFixed(4) + ')');
+}
 let drag = null; // { x0, y0, mode: 'wait' | 'drag', w, lastX, lastT, v }
 convView.addEventListener('touchstart', (e) => {
   if(e.touches.length !== 1 || pushAnims.length) return;
@@ -872,6 +888,7 @@ convView.addEventListener('touchmove', (e) => {
     cancelPress(); closeMsgMenu();
     contactsView.style.display = 'flex';
     contactsView.style.zIndex = 1; convView.style.zIndex = 2;
+    screenEl.classList.add('dragging');
   }
   e.preventDefault(); // 拖的时候别让聊天上下滚
   const x = Math.max(0, dx), p = Math.min(1, x / drag.w);
@@ -879,6 +896,7 @@ convView.addEventListener('touchmove', (e) => {
   convView.style.opacity = String(1 - p * 0.6);
   contactsView.style.transform = 'translateX(' + (-28 * (1 - p)) + '%)';
   contactsView.style.opacity = String(p);
+  bgLook(p);
   const dt = e.timeStamp - drag.lastT;
   if(dt > 0){ drag.v = 0.7 * ((t.clientX - drag.lastX) / dt) + 0.3 * drag.v; drag.lastX = t.clientX; drag.lastT = e.timeStamp; }
 }, { passive: false });
