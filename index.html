@@ -808,12 +808,12 @@ function openConv(cid){
   renderContacts();
   syncMessages(cid);
 }
-function closeConv(){
+function closeConv(fromDrag = false){
   if(!currentConv) return;
   closeMsgMenu();
   currentConv = null;
   renderContacts();
-  pushView(contactsView, convView, false);
+  pushView(contactsView, convView, false, fromDrag);
   updateBg();
 }
 // 推门进聊天：聊天页从右边滑进来、慢慢显现，联系人列表往左退一点、淡出；返回时反过来。
@@ -821,21 +821,27 @@ function closeConv(){
 const PUSH_MS = 360, PUSH_EASE = 'cubic-bezier(.32,.72,0,1)'; // 像 iOS 原生翻页：起步快，慢慢停稳
 const reduceMotion = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 let pushAnims = [];
-function pushView(entering, leaving, forward){
+// fromDrag：右滑返回时手指松开，从两层现在的位置接着播（剩下的路越短，播得越快）
+function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   pushAnims.forEach(a => a.cancel()); // 连点、点进去马上返回：打断上一段，从这一段接着来
   pushAnims = [];
-  [entering, leaving].forEach(el => { el.style.zIndex = ''; el.style.pointerEvents = ''; });
-  entering.style.display = 'flex';
-  if(!entering.animate || (reduceMotion && reduceMotion.matches)){ leaving.style.display = 'none'; return; }
   const front = forward ? entering : leaving; // 聊天页永远在上面
   const back = forward ? leaving : entering;
+  const nowF = { transform: front.style.transform || 'translateX(0)', opacity: front.style.opacity || 1 };
+  const nowB = { transform: back.style.transform || 'translateX(0)', opacity: back.style.opacity || 1 };
+  if(fromDrag) remain = Math.max(0, Math.min(1, (parseFloat(front.style.transform.replace(/[^\d.-]/g, '')) || 0) / (front.offsetWidth || 1)));
+  [entering, leaving].forEach(el => { el.style.zIndex = ''; el.style.pointerEvents = ''; el.style.transform = ''; el.style.opacity = ''; });
+  entering.style.display = 'flex';
+  if(!entering.animate || (reduceMotion && reduceMotion.matches)){ leaving.style.display = 'none'; return; }
   front.style.zIndex = 2; back.style.zIndex = 1;
   leaving.style.pointerEvents = 'none';
   const out = { transform: 'translateX(100%)', opacity: 0 }, inn = { transform: 'translateX(0)', opacity: 1 };
   const behind = { transform: 'translateX(-28%)', opacity: 0 };
-  const opt = { duration: PUSH_MS, easing: PUSH_EASE };
-  const a1 = front.animate(forward ? [out, inn] : [inn, out], opt);
-  const a2 = back.animate(forward ? [inn, behind] : [behind, inn], opt);
+  let ms = PUSH_MS;
+  if(fromDrag) ms = Math.max(160, PUSH_MS * (forward ? remain : 1 - remain)); // 弹回：剩下的是已经拖出去的那段
+  const opt = { duration: ms, easing: PUSH_EASE };
+  const a1 = front.animate(fromDrag ? [nowF, forward ? inn : out] : (forward ? [out, inn] : [inn, out]), opt);
+  const a2 = back.animate(fromDrag ? [nowB, forward ? behind : inn] : (forward ? [inn, behind] : [behind, inn]), opt);
   pushAnims = [a1, a2];
   a1.onfinish = () => {
     leaving.style.display = 'none';
@@ -843,7 +849,49 @@ function pushView(entering, leaving, forward){
     pushAnims = [];
   };
 }
-document.getElementById('backBtn').addEventListener('click', closeConv);
+document.getElementById('backBtn').addEventListener('click', () => closeConv());
+
+// 从左边缘往右拖：聊天页跟着手指走，松手时拖过一半（或甩得够快）就退回联系人列表，不够就弹回来
+const EDGE_PX = 28;
+let drag = null; // { x0, y0, mode: 'wait' | 'drag', w, lastX, lastT, v }
+convView.addEventListener('touchstart', (e) => {
+  if(e.touches.length !== 1 || pushAnims.length) return;
+  const t = e.touches[0];
+  const left = convView.getBoundingClientRect().left;
+  if(t.clientX - left > EDGE_PX) return;
+  drag = { x0: t.clientX, y0: t.clientY, mode: 'wait', w: convView.offsetWidth, lastX: t.clientX, lastT: e.timeStamp, v: 0 };
+}, { passive: true });
+convView.addEventListener('touchmove', (e) => {
+  if(!drag) return;
+  const t = e.touches[0];
+  const dx = t.clientX - drag.x0, dy = t.clientY - drag.y0;
+  if(drag.mode === 'wait'){
+    if(Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    if(dx <= 0 || Math.abs(dy) > dx){ drag = null; return; } // 先往上下走：是在滚聊天，不管
+    drag.mode = 'drag';
+    cancelPress(); closeMsgMenu();
+    contactsView.style.display = 'flex';
+    contactsView.style.zIndex = 1; convView.style.zIndex = 2;
+  }
+  e.preventDefault(); // 拖的时候别让聊天上下滚
+  const x = Math.max(0, dx), p = Math.min(1, x / drag.w);
+  convView.style.transform = 'translateX(' + x + 'px)';
+  convView.style.opacity = String(1 - p * 0.6);
+  contactsView.style.transform = 'translateX(' + (-28 * (1 - p)) + '%)';
+  contactsView.style.opacity = String(p);
+  const dt = e.timeStamp - drag.lastT;
+  if(dt > 0){ drag.v = 0.7 * ((t.clientX - drag.lastX) / dt) + 0.3 * drag.v; drag.lastX = t.clientX; drag.lastT = e.timeStamp; }
+}, { passive: false });
+function endDrag(){
+  if(!drag) return;
+  const d = drag; drag = null;
+  if(d.mode !== 'drag') return;
+  const p = (parseFloat(convView.style.transform.replace(/[^\d.-]/g, '')) || 0) / d.w;
+  if(p > 0.5 || d.v > 0.5) closeConv(true);                 // 拖过一半或者甩得快（每毫秒 0.5 像素以上）：返回
+  else pushView(convView, contactsView, true, true);       // 不够：弹回聊天
+}
+convView.addEventListener('touchend', endDrag);
+convView.addEventListener('touchcancel', endDrag);
 
 // 他们发的照片：有图就画成相框（角落小字注明摄影师和图库），没图（搜不到）就画成文字照片卡片
 function fillPhoto(b, p){
