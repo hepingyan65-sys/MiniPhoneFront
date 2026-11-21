@@ -238,6 +238,7 @@
 
   /* 消息出现的轻微动效 */
   .row{ animation: bubbleIn .28s ease; }
+  .row.settled{ animation:none; } /* 一次性画出来的旧消息不播动画，只有新来的才浮上来 */
   @keyframes bubbleIn{ from{ opacity:0; transform: translateY(8px) scale(.97); } to{ opacity:1; transform: translateY(0) scale(1); } }
 
   /* 正在输入的跳动小点 */
@@ -790,7 +791,7 @@ function renderContacts(){
 }
 
 function openConv(cid){
-  if(currentConv !== cid){ cancelReply(); }
+  if(currentConv !== cid){ cancelReply(); firstShownId = null; }
   currentConv = cid;
   personaNameEl.textContent = contactName(cid);
   personaNameEl.classList.toggle('cjk', hasCJK(contactName(cid)));
@@ -983,8 +984,9 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     q.addEventListener('click', () => jumpToMessage(opts.replyTo));
     holder.appendChild(q);
   }
+  if(bulkPaint) row.classList.add('settled');
   container.appendChild(row);
-  container.scrollTop = container.scrollHeight;
+  if(!bulkPaint) container.scrollTop = container.scrollHeight;
   return b;
 }
 
@@ -1004,7 +1006,16 @@ function snippetOf(m){
 
 // 点一下引用框，跳回原来那条消息，让它亮一下
 function jumpToMessage(id){
-  const el = [...chatEl.querySelectorAll('.bubble')].find(x => x.dataset.id === id);
+  let el = [...chatEl.querySelectorAll('.bubble')].find(x => x.dataset.id === id);
+  if(!el && currentConv){
+    // 原消息太早、还没画出来：先往前补画到那条（多带几条上文）
+    const h = historyOf(currentConv);
+    const i = h.findIndex(m => m.id === id);
+    if(i < 0) return;
+    firstShownId = h[Math.max(0, i - 5)].id;
+    renderChat();
+    el = [...chatEl.querySelectorAll('.bubble')].find(x => x.dataset.id === id);
+  }
   if(!el) return;
   el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   el.classList.add('flash');
@@ -1255,8 +1266,8 @@ function addNote(text){
   const row = document.createElement('div');
   row.className = 'note';
   row.textContent = text;
-  chatEl.appendChild(row);
-  chatEl.scrollTop = chatEl.scrollHeight;
+  (paintInto || chatEl).appendChild(row);
+  if(!bulkPaint) chatEl.scrollTop = chatEl.scrollHeight;
   return row;
 }
 
@@ -1301,12 +1312,12 @@ function splitAction(t){
 function bubbleForMessage(m){
   if(m.photo){ // 照片单独一条，不拆动作
     maybeTimeDivider(m.ts);
-    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo, reactions: m.reactions });
+    addBubble(paintInto || chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, photo: m.photo, reactions: m.reactions });
     return;
   }
   if(m.voice){ // 语音单独一条，不拆动作
     maybeTimeDivider(m.ts);
-    addBubble(chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, voice: m.voice, reactions: m.reactions });
+    addBubble(paintInto || chatEl, m.role, '', null, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, voice: m.voice, reactions: m.reactions });
     return;
   }
   const thumb = thumbs[m.ts];
@@ -1316,9 +1327,15 @@ function bubbleForMessage(m){
   if(!text && !action && !m.hadImage && !thumb) return; // 只有动作、又关掉了显示：这条就不出现
   maybeTimeDivider(m.ts);
   text = text || (m.hadImage && !thumb ? '[图片]' : '');
-  addBubble(chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, action, reactions: m.reactions });
+  addBubble(paintInto || chatEl, m.role, text, thumb, { id: m.id, replyTo: m.replyTo, speaker: m.speaker, action, reactions: m.reactions });
 }
 
+// 聊天记录很长时，一次全画出来要好几秒（点联系人会愣住）。所以先只画最近的 CHAT_PAGE 条，
+// 往上翻到顶附近再一批批接上更早的（CHAT_MORE 条）
+const CHAT_PAGE = 60, CHAT_MORE = 40;
+let firstShownId = null; // 现在画出来的最早那条；换对话时清空
+let bulkPaint = false;   // 一次画很多条时：不每条都滚到底（每滚一次浏览器就要重新排版一遍）、不播入场动画
+let paintInto = null;    // 往上补消息时先画进这个临时容器，再整块插到最前面
 function renderChat(){
   chatEl.innerHTML = '';
   emptyNote = null;
@@ -1326,10 +1343,43 @@ function renderChat(){
   if(!currentConv) return;
   const h = historyOf(currentConv);
   if(h.length === 0){
+    firstShownId = null;
     emptyNote = addNote(isGroup(currentConv) ? '群里还没有消息，等他们聊起来吧' : '还没有消息，跟' + contactName(currentConv) + '说点什么吧');
+    return;
   }
-  h.forEach(bubbleForMessage);
+  let start = firstShownId ? h.findIndex(m => m.id === firstShownId) : -1;
+  if(start < 0) start = Math.max(0, h.length - CHAT_PAGE);
+  firstShownId = h[start].id;
+  if(start > 0) lastShownTs = h[start - 1].ts || 0; // 时间分隔线和一口气全画时一样
+  bulkPaint = true;
+  try{ h.slice(start).forEach(bubbleForMessage); }
+  finally{ bulkPaint = false; }
+  chatEl.scrollTop = chatEl.scrollHeight;
 }
+// 往上翻到顶附近：把更早的一批画出来插到最前面，并保持你正在看的那条不动
+let loadingOlder = false;
+function loadOlder(){
+  if(loadingOlder || !currentConv || !firstShownId) return;
+  const h = historyOf(currentConv);
+  const start = h.findIndex(m => m.id === firstShownId);
+  if(start <= 0) return;
+  loadingOlder = true;
+  const from = Math.max(0, start - CHAT_MORE);
+  const keepTs = lastShownTs;
+  const box = document.createElement('div');
+  lastShownTs = from > 0 ? (h[from - 1].ts || 0) : 0;
+  paintInto = box; bulkPaint = true;
+  try{ h.slice(from, start).forEach(bubbleForMessage); }
+  finally{ paintInto = null; bulkPaint = false; lastShownTs = keepTs; }
+  const fromBottom = chatEl.scrollHeight - chatEl.scrollTop;
+  const frag = document.createDocumentFragment();
+  while(box.firstChild) frag.appendChild(box.firstChild);
+  chatEl.insertBefore(frag, chatEl.firstChild);
+  chatEl.scrollTop = chatEl.scrollHeight - fromBottom;
+  firstShownId = h[from].id;
+  loadingOlder = false;
+}
+chatEl.addEventListener('scroll', () => { if(chatEl.scrollTop < 300) loadOlder(); }, { passive: true });
 let emptyNote = null;
 
 // 去后端拉某个对话的新消息
