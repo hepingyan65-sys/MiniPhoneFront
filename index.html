@@ -757,7 +757,9 @@
   </div>
   <script>
     // 点推送打开的（地址带 #alis）：不停在封面，直接进 FromAlis
-    if(location.hash === '#alis'){ document.getElementById('start').classList.add('gone'); history.replaceState(null, '', location.pathname + location.search); }
+    // 点工作台的推送打开的（#wb / #wb-back）：也不停在封面，等下面的脚本把工作台打开
+    window.__openFromPush = /^#(alis|wb|wb-back)$/.test(location.hash) ? location.hash.slice(1) : '';
+    if(window.__openFromPush){ document.getElementById('start').classList.add('gone'); history.replaceState(null, '', location.pathname + location.search); }
   </script>
 </div>
 
@@ -2383,7 +2385,11 @@ document.getElementById('spotDesk').addEventListener('click', e => {
 document.querySelectorAll('.to-start').forEach(b => b.addEventListener('click', showStart));
 // App 开着时点了推送：Service Worker 发来 open: 'alis'，从封面直接进去
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.addEventListener('message', e => { if(e.data && e.data.open === 'alis') enterAlis(false); });
+  navigator.serviceWorker.addEventListener('message', e => {
+    const to = e.data && e.data.open;
+    if(to === 'alis') enterAlis(false);
+    else if(to === 'wb' || to === 'wb-back') openWbFromPush(to === 'wb-back');
+  });
 }
 
 
@@ -2789,7 +2795,17 @@ function enterWb(){
   startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }], { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)' });
   startAnim.onfinish = done;
 }
-function leaveWb(){ wbEl('wb').classList.add('gone'); clearInterval(wbPoll); wbPoll = null; }
+function leaveWb(){ wbEl('wb').classList.add('gone'); wbEl('wbSheet').classList.remove('flipped'); clearInterval(wbPoll); wbPoll = null; } // 离开时翻回正面，下次从封面进来先看到手头的事
+// 点了克克、Muse 写东西的推送：不管在哪，直接摊开这张纸（是信的话翻到背面），不播封面动画
+function openWbFromPush(back){
+  if(startAnim){ startAnim.cancel(); startAnim = null; }
+  startEl.classList.add('gone');
+  wbEl('wbCard').classList.add('gone');
+  if(!wbEl('wbPage').classList.contains('gone')){ wbEl('wbPage').classList.add('gone'); wbPageId = null; }
+  if(wbEl('wb').classList.contains('gone')) enterWb(); else wbSync();
+  wbFlipTo(!!back);
+}
+if(window.__openFromPush === 'wb' || window.__openFromPush === 'wb-back') openWbFromPush(window.__openFromPush === 'wb-back');
 
 /* ---------- 初始化 ---------- */
 async function init(){
