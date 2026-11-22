@@ -600,6 +600,19 @@
   .toast .nm small{ font-family: -apple-system, sans-serif; font-size:10.5px; color: var(--ink-dim); margin-left:auto; white-space:nowrap; }
   .toast .pv{ font-size:12.5px; color: var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
   .toast .lamp-dot{ width:5px; height:5px; border-radius:50%; background: var(--lamp); box-shadow:0 0 8px 2px rgba(207,192,154,.5); flex:none; align-self:center; }
+
+  /* 背面、某一页：写字的那一行占纸底下自己的一块，信/草稿只在上面滚动，不会再从输入栏底下穿过去 */
+  .wb-back, .wb-page .wb-face{ display:flex; flex-direction:column; }
+  .wb-back .wb-inner, .wb-page .wb-inner{ flex:1; min-height:0; height:auto; padding-bottom:16px; }
+  .wb-back .wb-pen, .wb-page .wb-pen{ position:relative; left:auto; right:auto; bottom:auto; flex:none; margin:0 18px 12px 50px; }
+  .wb-back .wb-flip{ position:relative; left:auto; right:auto; bottom:auto; flex:none; align-self:flex-start; margin:0 0 4px 44px; padding:6px 16px 10px 6px !important; }
+  /* 大标题：往下划藏起来，往上划出来（像 Safari 的地址栏）；出来时底下带一层渐淡的纸色，不和下面的字叠 */
+  .wb-front .wb-inner > .wb-head, .wb-back .wb-inner > .wb-head{ position:sticky; top:-18px; z-index:2; margin-top:-18px; margin-bottom:4px; padding:18px 40px 18px 0;
+    margin-left:-8px; margin-right:-12px; padding-left:8px; /* 比字宽一点，但不盖住左边那根红线 */
+    background: rgb(225,211,174); /* 跟纸上方的颜色差不多，底下渐渐淡掉 */
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 100%);
+    transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s; }
+  .wb-inner.tucked > .wb-head{ transform: translateY(-110%); opacity:0; }
 </style>
 </head>
 <body>
@@ -2846,6 +2859,17 @@ function wbRenderCard(){
 wbEl('wbRolesBtn').addEventListener('click', () => { wbRenderCard(); wbEl('wbCard').classList.remove('gone'); });
 wbEl('wbCardClose').addEventListener('click', () => { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); wbEl('wbCard').classList.add('gone'); });
 wbEl('wbCard').addEventListener('click', e => { if(e.target === wbEl('wbCard')) wbEl('wbCardClose').click(); });
+
+/* ---- 大标题跟着划的方向藏起来 / 出来 ---- */
+['wbFront', 'wbBack'].forEach(id => {
+  const el = wbEl(id); let last = 0;
+  el.addEventListener('scroll', () => {
+    const y = el.scrollTop, d = y - last; last = y;
+    if(y < 24) el.classList.remove('tucked');        // 回到最上面：一定出来
+    else if(d > 6) el.classList.add('tucked');       // 往下划：藏起来
+    else if(d < -6) el.classList.remove('tucked');   // 往上划：出来
+  }, { passive: true });
+});
 
 /* ---- 进出工作台 ---- */
 // 从封面推近到书桌上：封面朝她放大、淡出，下面是这张纸
