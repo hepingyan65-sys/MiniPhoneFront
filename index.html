@@ -570,6 +570,25 @@
   .wb-lock input{ display:block; width:100%; margin:12px 0; border:none; border-bottom:1px solid var(--ink-faint); background:transparent; outline:none; font-size:16px; padding:4px 0; color: var(--ink); }
   .wb-lock button{ font-family: var(--name-font) !important; font-style:italic; font-size:14px; color: var(--c-jes) !important; }
   .wb-err{ color: var(--red); font-size:11px; margin-top:6px; }
+
+  /* ==================== App 里的小弹窗：在别处时，有人发来消息 ====================
+     雾玻璃小卡片从顶上滑下来；点一下进他的聊天，往上一划收起，4.5 秒后自己缩回去 */
+  .toast{ position:absolute; z-index:60; left:10px; right:10px; top: calc(env(safe-area-inset-top, 0px) + 8px);
+    display:flex; align-items:center; gap:11px; padding:10px 14px 10px 10px; border-radius:20px; cursor:pointer;
+    background: rgba(18,26,21,.72); border:1px solid var(--glass-edge); color: var(--ink);
+    -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2);
+    box-shadow: 0 10px 30px rgba(0,0,0,.45); -webkit-tap-highlight-color:transparent;
+    transform: translateY(calc(-100% - 30px)); opacity:0; pointer-events:none;
+    transition: transform .26s cubic-bezier(.4,0,.6,1), opacity .26s; touch-action:none; }
+  @media (min-width: 481px){ .toast{ left:24px; right:24px; top:22px; } }
+  .toast.show{ transform:none; opacity:1; pointer-events:auto; transition: transform .5s cubic-bezier(.3,1.35,.5,1), opacity .2s; }
+  .toast.dragging{ transition:none; }
+  .toast img{ width:36px; height:36px; border-radius:50%; object-fit:cover; flex:none; background: var(--placeholder); }
+  .toast .tx{ flex:1; min-width:0; }
+  .toast .nm{ display:flex; align-items:baseline; gap:8px; font-family: var(--name-font); font-size:15px; line-height:1.2; }
+  .toast .nm small{ font-family: -apple-system, sans-serif; font-size:10.5px; color: var(--ink-dim); margin-left:auto; white-space:nowrap; }
+  .toast .pv{ font-size:12.5px; color: var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .toast .lamp-dot{ width:5px; height:5px; border-radius:50%; background: var(--lamp); box-shadow:0 0 8px 2px rgba(207,192,154,.5); flex:none; align-self:center; }
 </style>
 </head>
 <body>
@@ -721,6 +740,9 @@
       <div class="wb-face"><button class="wb-x" id="wbCardClose" aria-label="收起"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="wb-inner" id="wbCardIn"></div></div>
     </div>
   </div>
+
+  <!-- App 里的小弹窗 -->
+  <div class="toast" id="toast" role="button" aria-live="polite"><img id="toastAv" alt=""><div class="tx"><div class="nm"><span id="toastName"></span><small id="toastMore"></small></div><div class="pv" id="toastPv"></div></div></div>
 
   <!-- 封面：打开 App 先看到这里 -->
   <div class="start" id="start">
@@ -992,7 +1014,9 @@ function markRead(cid){
 }
 function isViewing(cid){
   return cid === currentConv && document.visibilityState === 'visible'
-    && document.getElementById('panel-chat').classList.contains('active');
+    && document.getElementById('panel-chat').classList.contains('active')
+    && document.getElementById('start').classList.contains('gone') // 封面盖着、在工作台里：底下开着他的聊天也不算在看
+    && document.getElementById('wb').classList.contains('gone');
 }
 // 列表里的时间：今天显示几点，昨天显示"昨天"，一周内显示周几，再早显示日期
 function listTime(ts){
@@ -1805,6 +1829,7 @@ let emptyNote = null;
 // 去后端拉某个对话的新消息
 const syncing = {}, lastSyncAt = {};
 let sendingConv = null; // 正在发消息的对话（发的时候先不拉这个对话，免得重复）
+const syncedOnce = {}; // 打开 App 后，每个对话是不是已经拉过一次了
 async function syncMessages(cid){
   if(!backendUrl || !canChat(cid) || syncing[cid] || sendingConv === cid) return;
   syncing[cid] = true;
@@ -1815,6 +1840,7 @@ async function syncMessages(cid){
     const data = await api('/messages?conv=' + encodeURIComponent(cid) + '&after=' + after, { timeout: 30000 });
     updateStatus(cid, data.status);
     let added = false, edited = false, reacted = false;
+    const fresh = [];
     // 后端删掉的消息：手机里的副本也删掉
     const removed = Array.isArray(data.removed) ? data.removed : [];
     for(let i = h.length - 1; i >= 0; i--){
@@ -1836,6 +1862,7 @@ async function syncMessages(cid){
         return;
       }
       h.push(m);
+      if(m.role !== 'user') fresh.push(m);
       if(cid === currentConv){
         if(emptyNote){ emptyNote.remove(); emptyNote = null; }
         bubbleForMessage(m);
@@ -1850,6 +1877,9 @@ async function syncMessages(cid){
       if(isViewing(cid)) markRead(cid);
       renderContacts();
     }
+    // 小弹窗：打开 App 后的第一次拉取不弹（离开期间的消息推送已经告诉过她了）；群聊不弹；正在看这个聊天不弹
+    if(syncedOnce[cid] && fresh.length && !isGroup(cid) && !isViewing(cid) && document.visibilityState === 'visible') showToast(cid, fresh[fresh.length - 1], fresh.length);
+    syncedOnce[cid] = true;
   }catch(e){ /* 拉不到就下次再拉 */ }
   syncing[cid] = false;
 }
@@ -2306,9 +2336,9 @@ async function migrateLegacyIfNeeded(){
 const startEl = document.getElementById('start');
 let startAnim = null;
 function enterAlis(animate){
-  if(startEl.classList.contains('gone')){ leaveWb(); return; } // 已经不在封面（比如在工作台里点了推送）：直接回到 FromAlis
+  if(startEl.classList.contains('gone')){ leaveWb(); if(currentConv && isViewing(currentConv)){ markRead(currentConv); renderContacts(); } return; } // 已经不在封面（比如在工作台里点了推送）：直接回到 FromAlis
   if(startAnim){ startAnim.cancel(); startAnim = null; }
-  const done = () => { startEl.classList.add('gone'); startAnim = null; leaveWb(); placeLamp(false); };
+  const done = () => { startEl.classList.add('gone'); startAnim = null; leaveWb(); placeLamp(false); if(currentConv && isViewing(currentConv)){ markRead(currentConv); renderContacts(); } }; // 回到正开着的聊天：这时才算看到
   if(animate === false || !startEl.animate || (reduceMotion && reduceMotion.matches)) return done();
   startEl.style.transformOrigin = '30% 38%'; // 朝窗边的他推进去
   startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }],
@@ -2355,6 +2385,52 @@ document.querySelectorAll('.to-start').forEach(b => b.addEventListener('click', 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', e => { if(e.data && e.data.open === 'alis') enterAlis(false); });
 }
+
+
+/* ---------- App 里的小弹窗 ---------- */
+// 在工作台、封面、或者 FromAlis 的别的页面时，有人（私聊）发来消息：雾玻璃小卡片从顶上滑下来
+// 好几条一起来就叠成一张（显示最新那条和一共几条）；点一下进他的聊天，往上一划收起，4.5 秒后自己缩回去
+const toastEl = document.getElementById('toast');
+let toastCid = null, toastCount = 0, toastTimer = null, toastDrag = null;
+function showToast(cid, m, n){
+  toastCount = toastEl.classList.contains('show') ? toastCount + n : n;
+  toastCid = cid;
+  document.getElementById('toastAv').src = CONTACT_INFO[cid].avatar || '';
+  document.getElementById('toastName').textContent = contactName(cid);
+  document.getElementById('toastMore').textContent = toastCount > 1 ? '共 ' + toastCount + ' 条' : '现在';
+  document.getElementById('toastPv').textContent = previewOf(cid, m);
+  toastEl.style.transform = '';
+  toastEl.classList.add('show');
+  armToast();
+}
+function armToast(){ clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 4500); }
+function hideToast(){ clearTimeout(toastTimer); toastEl.classList.remove('show', 'dragging'); toastEl.style.transform = ''; toastCount = 0; }
+// 点一下：从哪儿都直接进他的聊天
+function openFromToast(){
+  const cid = toastCid; hideToast();
+  if(!cid) return;
+  enterAlis(false); // 封面、工作台都收起来
+  const chatBtn = document.querySelector('.tab-btn[data-tab="chat"]');
+  if(!chatBtn.classList.contains('active')) chatBtn.click();
+  if(currentConv !== cid) openConv(cid);
+}
+// 往上一划收起；手指按着的时候不自己缩回去
+toastEl.addEventListener('touchstart', e => { toastDrag = { y: e.touches[0].clientY, dy: 0 }; clearTimeout(toastTimer); toastEl.classList.add('dragging'); }, { passive: true });
+toastEl.addEventListener('touchmove', e => {
+  if(!toastDrag) return;
+  toastDrag.dy = e.touches[0].clientY - toastDrag.y;
+  toastEl.style.transform = 'translateY(' + (toastDrag.dy < 0 ? toastDrag.dy : toastDrag.dy * .25) + 'px)'; // 往下拉只跟一点点
+}, { passive: true });
+toastEl.addEventListener('touchend', () => {
+  if(!toastDrag) return;
+  const dy = toastDrag.dy; toastDrag = null;
+  toastEl.classList.remove('dragging');
+  if(dy < -24) return hideToast();
+  toastEl.style.transform = '';
+  if(Math.abs(dy) < 8) return openFromToast(); // 没怎么动：算点了一下
+  armToast();
+});
+toastEl.addEventListener('click', e => { if(!('ontouchstart' in window)) openFromToast(); }); // 电脑上用鼠标点
 
 /* ---------- 工作台（Workbench） ---------- */
 // 数据的"正本"在后端（workbench.js），手机只存一份副本 mp_wb；读写都要带钥匙（mp_wb_key，和后端的 WORKBENCH_KEY 一样）
