@@ -122,11 +122,6 @@
   /* 点下去"哗啦"散开的光点 */
   .spark{ position:absolute; width:3.5px; height:3.5px; border-radius:50%; pointer-events:none; z-index:4;
     background: #F4E7C4; box-shadow: 0 0 6px 1.5px rgba(232,212,160,.75); }
-  .start-toast{ position:absolute; left:50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); z-index:3;
-    font-size:11px; letter-spacing:.12em; color: var(--ink-dim); background: rgba(10,10,10,.55); border:1px solid rgba(255,255,255,.08);
-    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); padding:7px 14px; border-radius:20px; white-space:nowrap;
-    opacity:0; transition: opacity .35s; pointer-events:none; }
-  .start-toast.show{ opacity:1; }
 
   /* ---- 顶部各tab的header ---- */
   .header{ display:flex; align-items:center; gap:12px; padding: 8px 16px 14px; border-bottom: 1px solid var(--glass-edge); flex-shrink:0;
@@ -435,6 +430,146 @@
   .tab-lamp.instant{ transition:none; }
   /* 键盘弹出时：收起底部 Tab 栏，让输入框直接贴在键盘上面（像原生聊天 App） */
   body.kb-open .tabbar{ display:none; }
+
+  /* ==================== 工作台（Workbench）：一张泛黄的纸 ====================
+     正面是手头的事，翻过来是三个人往来的信；点一件事，另一张纸盖上来，是它的那一页。
+     色调跟着封面那张画走：暗棕的桌面、旧纸、深棕墨水，三个人三种墨水色 */
+  .wb{ --ink:#2C2218; --ink-soft:#5E4E3A; --ink-faint:rgba(70,52,30,.45); --red:#9A3A2C;
+    --paper:#E9DDBF; --paper-2:#DDCBA3; --c-claude:#8A4B2A; --c-muse:#2F5560; --c-jes:#5B3F68;
+    position:absolute; inset:12px; border-radius:26px; overflow:hidden; z-index:40; background:#0B0806;
+    display:flex; flex-direction:column; color: var(--ink); font-family:"Noto Serif SC", serif; }
+  @media (max-width: 480px){ .wb{ inset:0; border-radius:0; padding-top: env(safe-area-inset-top, 0px); } }
+  .wb.gone, .wb .gone{ display:none !important; }
+  .wb-room{ position:absolute; inset:-20px; z-index:0; background:url('start.jpg') 62% 80% / 260% auto no-repeat;
+    filter: blur(7px) brightness(.38) saturate(.8); }
+  .wb-top{ position:relative; z-index:1; height:50px; flex:none; display:flex; align-items:center; justify-content:center; color: rgba(236,226,204,.8); }
+  .wb-top .t{ font-family: var(--title-font); font-size:14px; letter-spacing:.22em; }
+  .wb-top .to-start{ position:absolute; left:6px; top:5px; margin:0; color: rgba(236,226,204,.6); }
+  .wb-sync{ position:absolute; right:16px; font-size:10px; color: rgba(236,226,204,.45); letter-spacing:.1em; }
+  .wb-stage{ position:relative; z-index:1; flex:1; min-height:0; padding:0 12px calc(16px + env(safe-area-inset-bottom, 0px)); perspective:1600px; }
+  .wb-sheet{ position:relative; height:100%; transform-style:preserve-3d; transition: transform .9s cubic-bezier(.4,.1,.2,1); }
+  .wb-sheet.flipped{ transform: rotateY(180deg); }
+  .wb-face{ position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    clip-path: polygon(0.4% 0.3%,22% 0,48% .4%,73% 0,99.6% .3%,100% 18%,99.6% 44%,100% 71%,99.7% 99.6%,76% 100%,51% 99.6%,27% 100%,0.3% 99.7%,0 76%,.4% 52%,0 27%);
+    background:
+      radial-gradient(circle at 82% 14%, rgba(150,105,45,.16), transparent 7%),
+      radial-gradient(circle at 12% 63%, rgba(150,105,45,.12), transparent 5%),
+      radial-gradient(circle at 70% 88%, rgba(140,95,40,.14), transparent 9%),
+      radial-gradient(circle at 34% 30%, rgba(150,105,45,.07), transparent 12%),
+      radial-gradient(ellipse at 50% 45%, transparent 50%, rgba(125,88,38,.30) 100%),
+      linear-gradient(170deg, var(--paper), var(--paper-2)); }
+  /* 纸的颗粒 */
+  .wb-face::before{ content:""; position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; opacity:.55;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .35  0 0 0 0 .2  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+  /* 一道淡淡的对折痕 */
+  .wb-face::after{ content:""; position:absolute; left:0; right:0; top:52%; height:14px; pointer-events:none;
+    background: linear-gradient(180deg, transparent, rgba(110,80,40,.10) 45%, rgba(255,250,235,.25) 55%, transparent); }
+  .wb-back{ transform: rotateY(180deg); }
+  .wb-margin{ position:absolute; left:40px; top:0; bottom:0; width:1px; background: rgba(154,58,44,.35); z-index:1; pointer-events:none; }
+  .wb-inner{ position:relative; z-index:1; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:18px 18px 70px 50px; }
+  .wb button{ font-family:inherit; color:inherit; background:none; border:none; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .wb-head{ display:flex; align-items:baseline; gap:10px; margin:0 40px 12px 0; }
+  .wb-head h1{ font-family: var(--name-font); font-style:italic; font-weight:400; font-size:24px; margin:0; line-height:1.2; }
+  .wb-head .sub{ font-size:10px; color: var(--ink-soft); letter-spacing:.2em; white-space:nowrap; }
+  .wb-tools{ position:absolute; right:12px; top:14px; z-index:2; display:flex; gap:6px; }
+  .wb-tools button{ width:32px; height:32px; display:flex; align-items:center; justify-content:center; }
+  .wb-tools svg, .wb-x svg{ width:19px; height:19px; stroke: var(--ink-soft); }
+  .wb-band{ font-size:10px; color: var(--ink-soft); letter-spacing:.15em; margin:4px 0 7px; }
+  .wb .wb-long{ position:relative; display:block; text-align:left; font-size:12px; margin:0 0 6px; padding-left:12px; }
+  .wb-long::before{ content:''; position:absolute; left:0; top:3px; bottom:3px; width:2px; border-radius:1px; background: var(--red); opacity:.55; }
+  .wb-long .r{ font-family: var(--name-font); font-size:11px; color: var(--ink-soft); margin-left:8px; }
+  .wb-gap{ height:10px; }
+  .wb-task{ position:relative; margin:0 0 11px; }
+  .wb-task .date{ position:absolute; left:-48px; top:2px; width:40px; text-align:right; font-family: var(--name-font); font-size:11px; color: var(--red); white-space:nowrap; }
+  .wb-task .row{ display:flex; align-items:flex-start; gap:7px; }
+  .wb-task .main{ flex:1; min-width:0; text-align:left; }
+  .wb-task .title{ font-size:13.5px; font-weight:600; line-height:1.4; }
+  .wb-task .grp{ font-weight:400; font-size:10px; color: var(--ink-soft); letter-spacing:.05em; margin-left:6px; }
+  .wb-task .meta{ font-size:10px; color: var(--ink-soft); margin-top:1px; letter-spacing:.04em; }
+  .wb-task .meta b, .wb-hi{ font-weight:400; color: var(--red); }
+  .wb-task.hold{ opacity:.55; }
+  .wb-task.leaving .title{ text-decoration: line-through; color: var(--ink-faint); }
+  .wb-task.leaving{ transition: opacity .5s .35s; opacity:0; }
+  /* 打勾的小方框：点的范围比框大一圈 */
+  .wb-box{ width:22px; height:22px; margin:-2px -4px -2px -5px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .wb-box i{ width:11px; height:11px; border:1px solid var(--ink-soft); border-radius:2px; position:relative; }
+  .wb-box.on i::after{ content:"✓"; position:absolute; left:1px; top:-6px; font-size:12px; font-style:normal; color: var(--ink); }
+  .wb-add{ display:block; margin:8px 0 0; font-family: var(--name-font); font-style:italic; font-size:13px; color: var(--ink-soft); }
+  .wb-empty{ font-size:12px; color: var(--ink-soft); margin:8px 0; }
+  .wb-fold{ position:absolute; right:0; bottom:0; width:46px; height:46px; z-index:3; pointer-events:none;
+    background: linear-gradient(135deg, transparent 50%, #C9B48A 50%, #E6D7B5 100%); box-shadow:-3px -3px 6px rgba(0,0,0,.12); }
+  .wb-flip{ position:absolute; right:0; bottom:0; z-index:4; padding:14px 52px 14px 16px !important; font-family: var(--name-font) !important; font-style:italic; font-size:12px; color: var(--ink-soft) !important; }
+  .wb-back .wb-flip{ right:auto; left:44px; padding:14px 16px 14px 6px !important; }
+  /* 署名的三种墨水 */
+  .wb-who{ font-family: var(--name-font); font-style:italic; font-size:13px; }
+  .wb-who.claude{ color: var(--c-claude); } .wb-who.muse{ color: var(--c-muse); } .wb-who.jes{ color: var(--c-jes); }
+  .wb-ts{ font-family: var(--name-font); font-size:10px; color: var(--ink-faint); margin-left:6px; white-space:nowrap; }
+  /* 背面：信 */
+  .wb-letter{ margin-bottom:16px; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
+  .wb-letter .sig{ text-align:right; margin-top:2px; white-space:normal; }
+  /* 写字的那一行（信、草稿共用） */
+  .wb-pen{ position:absolute; left:50px; right:18px; bottom:12px; z-index:3; display:flex; align-items:flex-end; gap:8px;
+    border-bottom:1px solid var(--ink-faint); padding:4px 0; }
+  .wb-back .wb-pen{ bottom:44px; }
+  .wb-pen textarea{ flex:1; min-width:0; resize:none; border:none; outline:none; background:transparent; font-family:"Noto Serif SC", serif;
+    font-size:12.5px; line-height:1.55; color: var(--ink); max-height:120px; padding:0; }
+  .wb-pen textarea::placeholder{ color: var(--ink-faint); }
+  .wb-pen button{ font-family: var(--name-font) !important; font-style:italic; font-size:13px; color: var(--c-jes) !important; padding:2px 0 2px 6px !important; white-space:nowrap; }
+  /* 一件事的那一页：另一张纸从下面盖上来 */
+  .wb-page{ position:absolute; z-index:5; left:0; right:0; top:50px; bottom:0; padding:0 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .wb-page .wb-face{ box-shadow:0 -6px 30px rgba(0,0,0,.45); }
+  .wb-x{ position:absolute; right:10px; top:12px; z-index:4; width:34px; height:34px; display:flex; align-items:center; justify-content:center; }
+  .wbp-title{ width:100%; border:none; outline:none; background:transparent; padding:0; margin:0 34px 10px 0;
+    font-family:"Noto Serif SC", serif; font-weight:600; font-size:20px; color: var(--ink); }
+  .wbp-title::placeholder{ color: var(--ink-faint); font-weight:400; }
+  .wbp-props{ font-size:11.5px; line-height:1.75; margin-bottom:8px; }
+  .wbp-prop{ display:flex; align-items:baseline; gap:6px; min-height:22px; }
+  .wbp-prop .k{ width:40px; flex:none; color: var(--ink-soft); font-size:10px; letter-spacing:.1em; }
+  .wbp-prop .v{ flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 10px; }
+  .wbp-opt{ color: var(--ink-faint) !important; font-size:11.5px; }
+  .wbp-opt.on{ color: var(--ink) !important; text-decoration: underline; text-decoration-thickness:1px; text-underline-offset:3px; }
+  .wbp-opt.on.hi{ color: var(--red) !important; }
+  .wbp-in{ flex:1; min-width:60px; border:none; border-bottom:1px dotted transparent; outline:none; background:transparent; padding:0;
+    font-family:"Noto Serif SC", serif; font-size:11.5px; line-height:1.6; color: var(--ink); }
+  .wbp-in:focus{ border-bottom-color: var(--ink-faint); }
+  .wbp-in::placeholder{ color: var(--ink-faint); }
+  .wbp-when{ display:flex; align-items:center; gap:4px; font-size:11.5px; }
+  .wbp-when input{ -webkit-appearance:none; appearance:none; border:none; border-bottom:1px dotted var(--ink-faint); border-radius:0; outline:none; background:transparent; color: var(--ink);
+    font-family:"Noto Serif SC", serif; font-size:11.5px; padding:0; min-width:0; min-height:20px; margin-right:6px; }
+  .wbp-when input::-webkit-date-and-time-value{ text-align:left; }
+  .wbp-when input:disabled{ opacity:.35; }
+  .wbp-when input[type=date]{ width:106px; } .wbp-when input[type=time]{ width:64px; }
+  .wbp-when input:invalid, .wbp-when input.empty{ color: var(--ink-faint); }
+  .wbp-sel{ border:none; outline:none; background:transparent; color: var(--ink); font-family:"Noto Serif SC", serif; font-size:11.5px; padding:0; -webkit-appearance:none; appearance:none; }
+  .wbp-subs{ margin:4px 0 10px; }
+  .wbp-subs .wb-task{ margin-bottom:6px; }
+  .wbp-subs .wb-task .title{ font-size:12px; font-weight:400; }
+  .wbp-notes{ font-size:12px; line-height:1.55; margin-top:10px; }
+  .wbp-note{ margin:0 0 7px; white-space:pre-wrap; word-break:break-word; }
+  .wbp-note textarea{ width:100%; border:1px dotted var(--ink-faint); background: rgba(255,250,235,.25); outline:none; resize:vertical; min-height:60px;
+    font-family:"Noto Serif SC", serif; font-size:12px; line-height:1.55; color: var(--ink); padding:4px; }
+  .wbp-note .acts{ display:flex; gap:14px; justify-content:flex-end; font-size:11px; margin-top:2px; }
+  .wbp-note .acts button{ color: var(--ink-soft) !important; }
+  .wbp-tear{ display:block; margin:26px 0 0; font-size:10px; letter-spacing:.2em; color: var(--ink-faint) !important; }
+  /* 分工一览 + 归档：一张小纸条 */
+  .wb-card{ position:absolute; z-index:6; inset:0; background: rgba(8,5,2,.62); display:flex; align-items:flex-start; justify-content:center; padding:64px 26px 40px; }
+  .wb-card .wb-face{ position:relative; inset:auto; width:100%; max-height:100%; box-shadow:0 14px 40px rgba(0,0,0,.6); transform: rotate(-.6deg); }
+  .wb-card .wb-inner{ height:auto; max-height:calc(100dvh - 150px); padding:18px 18px 22px 22px; }
+  .wb-card h3{ font-family: var(--name-font); font-style:italic; font-weight:400; font-size:15px; margin:14px 0 4px; }
+  .wb-card h3:first-of-type{ margin-top:0; }
+  .wb-card textarea{ width:100%; border:none; border-bottom:1px dotted var(--ink-faint); border-radius:0; -webkit-appearance:none; background:transparent; outline:none; resize:none;
+    font-family:"Noto Serif SC", serif; font-size:12px; line-height:1.55; color: var(--ink); padding:0; }
+  .wb-card ul{ list-style:none; padding:0; margin:4px 0 0; font-size:11.5px; line-height:1.6; }
+  .wb-card li{ margin:0 0 3px; }
+  .wb-card li .t{ font-weight:600; } .wb-card li .d{ color: var(--ink-soft); }
+  .wb-card .arch-row{ display:flex; align-items:baseline; gap:8px; }
+  .wb-card .arch-row .t{ font-weight:400; color: var(--ink-soft); text-decoration: line-through; flex:1; text-align:left; }
+  .wb-card #wbTorn .arch-row .t{ text-decoration:none; color: var(--ink-faint); }
+  .wb-card .arch-row button{ font-size:10px; color: var(--ink-soft) !important; white-space:nowrap; }
+  .wb-lock{ font-size:12px; color: var(--ink-soft); line-height:1.7; }
+  .wb-lock input{ display:block; width:100%; margin:12px 0; border:none; border-bottom:1px solid var(--ink-faint); background:transparent; outline:none; font-size:16px; padding:4px 0; color: var(--ink); }
+  .wb-lock button{ font-family: var(--name-font) !important; font-style:italic; font-size:14px; color: var(--c-jes) !important; }
+  .wb-err{ color: var(--red); font-size:11px; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -557,6 +692,36 @@
     </div>
   </div>
 
+  <!-- 工作台：一张泛黄的纸（正面是手头的事，翻过来是信） -->
+  <div class="wb gone" id="wb">
+    <div class="wb-room"></div>
+    <div class="wb-top"><button class="to-start" aria-label="回到封面"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10a6 6 0 0 1 12 0v10"/><path d="M4 20h16"/><path d="M12 4v16"/></svg></button><span class="t">WORKBENCH</span><span class="wb-sync" id="wbSync"></span></div>
+    <div class="wb-stage">
+      <div class="wb-sheet" id="wbSheet">
+        <div class="wb-face wb-front"><div class="wb-margin"></div>
+          <div class="wb-tools"><button id="wbRolesBtn" aria-label="分工一览"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg></button></div>
+          <div class="wb-inner" id="wbFront"></div>
+          <div class="wb-fold"></div><button class="wb-flip" id="wbFlip">翻过来 ›</button>
+        </div>
+        <div class="wb-face wb-back"><div class="wb-margin"></div>
+          <div class="wb-inner" id="wbBack"></div>
+          <div class="wb-pen"><textarea id="wbLetterIn" rows="1" placeholder="写点什么……"></textarea><button id="wbLetterSend">落款</button></div>
+          <button class="wb-flip" id="wbFlipBack">‹ 翻回去</button>
+        </div>
+      </div>
+    </div>
+    <div class="wb-page gone" id="wbPage">
+      <div class="wb-face" style="position:relative;height:100%"><div class="wb-margin"></div>
+        <button class="wb-x" id="wbPageClose" aria-label="合上"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="wb-inner" id="wbPageIn"></div>
+        <div class="wb-pen" id="wbNotePen"><textarea id="wbNoteIn" rows="1" placeholder="在这页上写点什么……"></textarea><button id="wbNoteSend">写上</button></div>
+      </div>
+    </div>
+    <div class="wb-card gone" id="wbCard">
+      <div class="wb-face"><button class="wb-x" id="wbCardClose" aria-label="收起"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="wb-inner" id="wbCardIn"></div></div>
+    </div>
+  </div>
+
   <!-- 封面：打开 App 先看到这里 -->
   <div class="start" id="start">
     <div class="start-art">
@@ -567,7 +732,6 @@
         <span class="start-label"><span class="en"><i>›</i>Workbench</span><span class="rule"></span><span class="zh">Jes 的工作台</span></span>
       </button>
     </div>
-    <div class="start-toast" id="startToast">工作台还在搭建中</div>
   </div>
   <script>
     // 点推送打开的（地址带 #alis）：不停在封面，直接进 FromAlis
@@ -2142,9 +2306,9 @@ async function migrateLegacyIfNeeded(){
 const startEl = document.getElementById('start');
 let startAnim = null;
 function enterAlis(animate){
-  if(startEl.classList.contains('gone')) return;
+  if(startEl.classList.contains('gone')){ leaveWb(); return; } // 已经不在封面（比如在工作台里点了推送）：直接回到 FromAlis
   if(startAnim){ startAnim.cancel(); startAnim = null; }
-  const done = () => { startEl.classList.add('gone'); startAnim = null; placeLamp(false); };
+  const done = () => { startEl.classList.add('gone'); startAnim = null; leaveWb(); placeLamp(false); };
   if(animate === false || !startEl.animate || (reduceMotion && reduceMotion.matches)) return done();
   startEl.style.transformOrigin = '30% 38%'; // 朝窗边的他推进去
   startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }],
@@ -2178,22 +2342,378 @@ function sparkle(spot){
     ], { duration: 650 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.3,1)', delay: Math.random() * 90 }).onfinish = () => d.remove();
   }
 }
-let toastTimer = null;
 document.getElementById('spotAlis').addEventListener('click', e => {
   sparkle(e.currentTarget);
   setTimeout(() => enterAlis(true), 220); // 先让光点散开一下再推进去
 });
 document.getElementById('spotDesk').addEventListener('click', e => {
   sparkle(e.currentTarget);
-  const t = document.getElementById('startToast'); // 工作台阶段二再做
-  t.classList.add('show'); clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+  setTimeout(enterWb, 220); // 推近到她的书桌上：工作台
 });
 document.querySelectorAll('.to-start').forEach(b => b.addEventListener('click', showStart));
 // App 开着时点了推送：Service Worker 发来 open: 'alis'，从封面直接进去
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', e => { if(e.data && e.data.open === 'alis') enterAlis(false); });
 }
+
+/* ---------- 工作台（Workbench） ---------- */
+// 数据的"正本"在后端（workbench.js），手机只存一份副本 mp_wb；读写都要带钥匙（mp_wb_key，和后端的 WORKBENCH_KEY 一样）
+// 时间都按 Jes 这边（日本）写："2026-11-28" 是全天，"2026-11-28T14:00" 带几点
+const WB_NAME = { jes: 'Jes', claude: 'Claude', muse: 'Muse' };
+const WB_PRI = { high: '高', mid: '中', low: '低' };
+const wbEl = id => document.getElementById(id);
+let wbKey = localStorage.getItem('mp_wb_key') || '';
+let wb = (() => { try{ return JSON.parse(localStorage.getItem('mp_wb')) || null; }catch(_){ return null; } })() || { tasks: [], letters: [], roles: {} };
+let wbLocked = !wbKey;   // 没钥匙、或者钥匙不对：纸上锁着
+let wbPageId = null;     // 正在看哪一页（'new' = 正在写一件新的事）
+let wbNewParent = '';    // 新写的这件事挂在哪个长线下面
+let wbPoll = null;
+const wbSaveLocal = () => { try{ localStorage.setItem('mp_wb', JSON.stringify(wb)); }catch(_){} };
+const wbEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function wbApi(path, body){
+  if(!backendUrl) throw new Error('先在 FromAlis 的「设置」里填后端地址');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  try{
+    const res = await fetch(backendUrl.replace(/\/$/, '') + path, {
+      method: body ? 'POST' : 'GET',
+      headers: Object.assign({ 'x-workbench-key': wbKey }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+    let data;
+    try{ data = await res.json(); }catch(_){ throw new Error('后端返回了看不懂的内容（状态码 ' + res.status + '）'); }
+    if(res.status === 401){ wbLocked = true; wbRender(); }
+    if(!res.ok) throw new Error(data.error || '请求失败');
+    return data;
+  }catch(e){
+    if(e.name === 'AbortError') throw new Error('后端太久没回应，可能刚睡醒，等一下再试');
+    throw e;
+  }finally{ clearTimeout(timer); }
+}
+function wbFlash(msg){ const el = wbEl('wbSync'); el.textContent = msg; clearTimeout(wbFlash.t); wbFlash.t = setTimeout(() => { el.textContent = ''; }, 2600); }
+
+async function wbSync(){
+  if(wbLocked) return wbRender();
+  try{
+    wb = await wbApi('/wb'); wbSaveLocal();
+    wbRender();
+    if(wbPageId && wbPageId !== 'new' && !wbPageBusy()) wbRenderPage();
+  }catch(e){ if(!wbLocked) wbFlash('没连上'); }
+}
+// 正在这一页上打字、改东西时，不拿新数据把它重画掉
+const wbPageBusy = () => { const a = document.activeElement; return !!a && wbEl('wbPage').contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+
+/* ---- 日期 ---- */
+const wbDate = v => (v || '').slice(0, 10);
+const wbClock = v => (v || '').slice(11, 16);
+function wbDay(v){
+  if(!v) return '';
+  const [y, m, d] = wbDate(v).split('-').map(Number);
+  const md = m + '/' + String(d).padStart(2, '0');
+  return y === new Date().getFullYear() ? md : (y + '/' + md);
+}
+function wbSpan(t){ // 跨了几天
+  if(!t.start || !t.end) return 0;
+  return Math.round((new Date(wbDate(t.end)) - new Date(wbDate(t.start))) / 86400000);
+}
+const wbChildren = id => wb.tasks.filter(t => t.parent === id);
+const wbIsLong = t => !t.parent && (wbChildren(t.id).length > 0 || wbSpan(t) >= 3); // 长线：下面挂着小事，或者跨三天以上
+const wbByStart = (a, b) => (a.start || '9999') < (b.start || '9999') ? -1 : (a.start || '9999') > (b.start || '9999') ? 1 : a.createdAt - b.createdAt;
+function wbMeta(t, withGroup){
+  const bits = [];
+  const c = wbClock(t.start);
+  if(t.end){ bits.push((c ? c + ' ' : '') + '→ ' + wbDay(t.end) + (wbClock(t.end) ? ' ' + wbClock(t.end) : '')); }
+  else if(t.start) bits.push(c || '全天');
+  if(t.category) bits.push(wbEsc(t.category));
+  if(t.priority) bits.push(t.priority === 'high' ? '<b>高</b>' : WB_PRI[t.priority]);
+  return bits.join(' · ');
+}
+
+/* ---- 正面：手头的事 ---- */
+function wbTaskRow(t, opts = {}){
+  const div = document.createElement('div');
+  div.className = 'wb-task' + (t.status === 'hold' ? ' hold' : '');
+  const p = t.parent && wb.tasks.find(x => x.id === t.parent);
+  div.innerHTML = (opts.noDate ? '' : '<span class="date">' + wbDay(t.start) + '</span>') +
+    '<div class="row">' + (t.status === 'hold' ? '' : '<button class="wb-box' + (t.status === 'done' ? ' on' : '') + '" aria-label="做完了"><i></i></button>') +
+    '<button class="main"><div class="title">' + wbEsc(t.title) + (p && !opts.noGroup ? '<span class="grp">· ' + wbEsc(p.title) + '</span>' : '') + '</div>' +
+    (wbMeta(t) ? '<div class="meta">' + wbMeta(t) + '</div>' : '') + '</button></div>';
+  div.querySelector('.main').addEventListener('click', () => wbOpenPage(t.id));
+  const box = div.querySelector('.wb-box');
+  if(box) box.addEventListener('click', () => wbToggleDone(t, div, box));
+  return div;
+}
+async function wbToggleDone(t, div, box){
+  const done = t.status !== 'done';
+  box.classList.toggle('on', done);
+  if(done && !wbEl('wbPage').contains(div)) div.classList.add('leaving'); // 正面：划掉、慢慢淡掉，收进归档
+  try{
+    await wbSaveTask(t.id, { status: done ? 'done' : 'todo' });
+    setTimeout(() => { wbRender(); if(wbPageId) wbRenderPage(); }, done ? 850 : 0);
+  }catch(e){ div.classList.remove('leaving'); box.classList.toggle('on', !done); wbFlash(e.message); }
+}
+
+function wbRender(){
+  const front = wbEl('wbFront'), back = wbEl('wbBack');
+  wbEl('wbRolesBtn').classList.toggle('gone', wbLocked);
+  wbEl('wbFlip').classList.toggle('gone', wbLocked);
+  if(wbLocked){
+    front.innerHTML = '<div class="wb-head"><h1>Locked</h1><span class="sub">这张纸上了锁</span></div>' +
+      '<div class="wb-lock">写下工作台的钥匙（就是在 Render 里设的 WORKBENCH_KEY）。只要写一次，这台手机会记住。' +
+      '<input type="password" id="wbKeyIn" autocomplete="off" placeholder="钥匙"><button id="wbKeyGo">打开 ›</button><div class="wb-err" id="wbKeyErr"></div></div>';
+    const go = async () => {
+      const v = wbEl('wbKeyIn').value.trim(); if(!v) return;
+      wbKey = v; wbLocked = false; wbEl('wbKeyErr').textContent = '';
+      try{ wb = await wbApi('/wb'); localStorage.setItem('mp_wb_key', v); wbSaveLocal(); wbRender(); }
+      catch(e){ wbLocked = true; wbRender(); wbEl('wbKeyErr').textContent = e.message; }
+    };
+    wbEl('wbKeyGo').addEventListener('click', go);
+    wbEl('wbKeyIn').addEventListener('keydown', e => { if(e.key === 'Enter') go(); });
+    back.innerHTML = '';
+    return;
+  }
+  front.innerHTML = '<div class="wb-head"><h1>On my desk</h1><span class="sub">手头的事</span></div>';
+  const live = wb.tasks.filter(t => t.status === 'todo');
+  const longs = live.filter(wbIsLong).sort(wbByStart);
+  const items = live.filter(t => !wbIsLong(t)).sort(wbByStart);
+  const holds = wb.tasks.filter(t => t.status === 'hold').sort(wbByStart);
+  if(longs.length){
+    front.insertAdjacentHTML('beforeend', '<div class="wb-band">长线</div>');
+    longs.forEach(t => {
+      const b = document.createElement('button'); b.className = 'wb-long';
+      b.innerHTML = wbEsc(t.title) + '<span class="r">' + (t.start ? wbDay(t.start) + (t.end ? ' – ' + wbDay(t.end) : '') : '') + '</span>';
+      b.addEventListener('click', () => wbOpenPage(t.id));
+      front.appendChild(b);
+    });
+    front.insertAdjacentHTML('beforeend', '<div class="wb-gap"></div>');
+  }
+  items.forEach(t => front.appendChild(wbTaskRow(t)));
+  if(!live.length && !holds.length) front.insertAdjacentHTML('beforeend', '<div class="wb-empty">纸上还空着。</div>');
+  const add = document.createElement('button'); add.className = 'wb-add'; add.textContent = '+ 写一件事';
+  add.addEventListener('click', () => { wbNewParent = ''; wbOpenPage('new'); });
+  front.appendChild(add);
+  if(holds.length){
+    front.insertAdjacentHTML('beforeend', '<div class="wb-band" style="margin-top:18px">搁置</div>');
+    holds.forEach(t => front.appendChild(wbTaskRow(t)));
+  }
+  // 背面：信
+  back.innerHTML = '<div class="wb-head"><h1>Letters</h1><span class="sub">往来</span></div>' +
+    (wb.letters.length ? '' : '<div class="wb-empty">还没有人写信。</div>') +
+    wb.letters.map(l => '<div class="wb-letter">' + wbEsc(l.text) + '<div class="sig"><span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
+  if(wbEl('wbCard') && !wbEl('wbCard').classList.contains('gone')) wbRenderCard();
+}
+function wbStamp(ts){ const d = new Date(ts); return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+
+async function wbSaveTask(id, patch){
+  const t = await wbApi('/wb/task/' + id, patch);
+  wb.tasks = wb.tasks.map(x => x.id === id ? t : x); wbSaveLocal();
+  return t;
+}
+
+/* ---- 一件事的那一页 ---- */
+function wbOpenPage(id){
+  wbPageId = id;
+  const page = wbEl('wbPage');
+  wbRenderPage();
+  page.classList.remove('gone');
+  if(page.animate && !(reduceMotion && reduceMotion.matches)) page.animate([{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,.8,.3,1)' });
+  if(id === 'new') setTimeout(() => wbEl('wbTitleIn') && wbEl('wbTitleIn').focus(), 60);
+}
+function wbClosePage(){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); // 先把正在改的存掉
+  const page = wbEl('wbPage');
+  const done = () => { page.classList.add('gone'); wbPageId = null; wbRender(); };
+  if(!page.animate || (reduceMotion && reduceMotion.matches)) return done();
+  page.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(40px)', opacity: 0 }], { duration: 240, easing: 'cubic-bezier(.4,0,.6,1)' }).onfinish = done;
+}
+
+function wbRenderPage(){
+  const box = wbEl('wbPageIn');
+  const isNew = wbPageId === 'new';
+  const t = isNew ? { title: '', status: 'todo', start: '', end: '', category: '', priority: '', remind: '', claude: '', muse: '', parent: wbNewParent, body: [] } : wb.tasks.find(x => x.id === wbPageId);
+  if(!t){ wbClosePage(); return; }
+  const kids = isNew ? [] : wbChildren(t.id).sort(wbByStart);
+  const canParent = !kids.length; // 自己下面挂着小事的，不能再挂到别处
+  const parents = wb.tasks.filter(x => !x.parent && x.id !== t.id && x.status !== 'done');
+  const opt = (field, val, label, hi) => '<button class="wbp-opt' + (t[field] === val ? ' on' : '') + (hi ? ' hi' : '') + '" data-f="' + field + '" data-v="' + val + '">' + label + '</button>';
+  const when = (field, label) => '<div class="wbp-prop"><span class="k">' + label + '</span><span class="v wbp-when">' +
+    '<input type="date" data-w="' + field + '" data-part="d" value="' + wbDate(t[field]) + '" class="' + (t[field] ? '' : 'empty') + '">' +
+    '<input type="time" data-w="' + field + '" data-part="t" value="' + wbClock(t[field]) + '" class="' + (wbClock(t[field]) ? '' : 'empty') + '"' + (t[field] ? '' : ' disabled') + '></span></div>';
+  const text = (field, label, ph, who) => '<div class="wbp-prop"><span class="k">' + label + '</span><span class="v">' + (who ? '<span class="wb-who ' + who + '">' + WB_NAME[who] + '</span>' : '') +
+    '<input class="wbp-in" data-f="' + field + '" value="' + wbEsc(t[field]) + '" placeholder="' + ph + '"></span></div>';
+  box.innerHTML =
+    '<input class="wbp-title" id="wbTitleIn" value="' + wbEsc(t.title) + '" placeholder="这件事叫什么">' +
+    '<div class="wbp-props">' +
+      '<div class="wbp-prop"><span class="k">状态</span><span class="v">' + opt('status', 'todo', '要做') + opt('status', 'hold', '搁置') + opt('status', 'done', '做完了') + '</span></div>' +
+      when('start', '开始') + when('end', '结束') +
+      text('category', '类别', '学习、搬家、社团……') +
+      '<div class="wbp-prop"><span class="k">优先级</span><span class="v">' + opt('priority', 'high', '高', true) + opt('priority', 'mid', '中') + opt('priority', 'low', '低') + opt('priority', '', '不分') + '</span></div>' +
+      text('remind', '提醒', '什么时候、谁来提醒') +
+      text('claude', '分工', '这件事里 Claude 做什么', 'claude') +
+      text('muse', '', '这件事里 Muse 做什么', 'muse') +
+      (canParent ? '<div class="wbp-prop"><span class="k">属于</span><span class="v"><select class="wbp-sel" data-f="parent"><option value="">（不属于哪条长线）</option>' +
+        parents.map(p => '<option value="' + p.id + '"' + (p.id === t.parent ? ' selected' : '') + '>' + wbEsc(p.title) + '</option>').join('') + '</select></span></div>' : '') +
+    '</div>' +
+    (isNew ? '' : '<div class="wbp-subs" id="wbKids"></div>') +
+    '<div class="wbp-notes" id="wbNotes"></div>' +
+    (isNew ? '' : '<button class="wbp-tear" id="wbTear">撕掉这一页</button>');
+  wbEl('wbNotePen').classList.toggle('gone', isNew);
+
+  // 标题：新的一件事写了标题才真正存下来
+  const titleIn = wbEl('wbTitleIn');
+  titleIn.addEventListener('change', async () => {
+    const v = titleIn.value.trim();
+    if(!v){ if(!isNew) titleIn.value = t.title; return; }
+    try{
+      if(wbPageId === 'new'){
+        const nt = await wbApi('/wb/task', { title: v, parent: wbNewParent });
+        wb.tasks.push(nt); wbSaveLocal(); wbPageId = nt.id; wbRenderPage();
+      }else if(v !== t.title) await wbSaveTask(t.id, { title: v });
+    }catch(e){ wbFlash(e.message); }
+  });
+  titleIn.addEventListener('keydown', e => { if(e.key === 'Enter') titleIn.blur(); });
+  // 下面的属性：新的一件事要先写标题
+  const need = () => { if(wbPageId === 'new'){ wbFlash('先写这件事叫什么'); titleIn.focus(); return false; } return true; };
+  const save = async (patch) => { if(!need()) return; try{ await wbSaveTask(wbPageId, patch); wbRenderPage(); }catch(e){ wbFlash(e.message); wbRenderPage(); } };
+  box.querySelectorAll('.wbp-opt').forEach(b => b.addEventListener('click', () => save({ [b.dataset.f]: b.dataset.v })));
+  box.querySelectorAll('.wbp-in').forEach(inp => {
+    inp.addEventListener('change', () => { if(need()) wbSaveTask(wbPageId, { [inp.dataset.f]: inp.value }).catch(e => { wbFlash(e.message); wbRenderPage(); }); });
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter') inp.blur(); });
+  });
+  box.querySelectorAll('.wbp-when input').forEach(inp => inp.addEventListener('change', () => {
+    const f = inp.dataset.w;
+    const d = box.querySelector('[data-w="' + f + '"][data-part="d"]').value;
+    const c = box.querySelector('[data-w="' + f + '"][data-part="t"]').value;
+    save({ [f]: d ? d + (c ? 'T' + c : '') : '' });
+  }));
+  const sel = box.querySelector('.wbp-sel');
+  if(sel) sel.addEventListener('change', () => save({ parent: sel.value }));
+
+  if(isNew) return;
+  // 挂在下面的小事（长线才有）
+  const kidsBox = wbEl('wbKids');
+  if(kids.length || wbIsLong(t)){
+    kids.forEach(k => kidsBox.appendChild(wbTaskRow(k, { noGroup: true, noDate: true })));
+    kidsBox.querySelectorAll('.wb-task').forEach((row, i) => { const d = wbDay(kids[i].start); if(d) row.querySelector('.meta') ? row.querySelector('.meta').insertAdjacentHTML('afterbegin', d + ' · ') : row.querySelector('.main').insertAdjacentHTML('beforeend', '<div class="meta">' + d + '</div>'); });
+    const add = document.createElement('button'); add.className = 'wb-add'; add.style.fontSize = '12px'; add.textContent = '+ 加一件小事';
+    add.addEventListener('click', () => { wbNewParent = t.id; wbOpenPage('new'); });
+    kidsBox.appendChild(add);
+  }
+  // 大家一起写的草稿：一段一段，前面署名
+  const notes = wbEl('wbNotes');
+  t.body.forEach(n => {
+    const p = document.createElement('div'); p.className = 'wbp-note';
+    p.innerHTML = '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbEsc(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt ? ' 改过' : '') + '</span>';
+    p.addEventListener('click', () => wbEditNote(t, n, p));
+    notes.appendChild(p);
+  });
+  wbEl('wbTear').addEventListener('click', async () => {
+    if(!confirm('把「' + t.title + '」这一页撕掉？' + (kids.length ? '\n挂在它下面的小事不会删，会变成单独的事。' : '') + '\n（后端回收站里还留着，找得回来）')) return;
+    try{ await wbApi('/wb/task/' + t.id + '/delete', {}); wb.tasks = wb.tasks.filter(x => x.id !== t.id).map(x => x.parent === t.id ? Object.assign({}, x, { parent: '' }) : x); wbSaveLocal(); wbClosePage(); }
+    catch(e){ wbFlash(e.message); }
+  });
+}
+// 点一段草稿：改它（清空再存 = 删掉这一段）
+function wbEditNote(t, n, p){
+  if(p.querySelector('textarea')) return;
+  p.innerHTML = '<textarea>' + wbEsc(n.text) + '</textarea><div class="acts"><button data-a="del">删掉</button><button data-a="cancel">算了</button><button data-a="ok">改好了</button></div>';
+  const ta = p.querySelector('textarea'); ta.focus();
+  p.querySelector('.acts').addEventListener('click', async e => {
+    e.stopPropagation();
+    const a = e.target.dataset.a; if(!a) return;
+    try{
+      if(a === 'del'){ if(!confirm('删掉这一段？')) return; await wbApi('/wb/task/' + t.id + '/note/' + n.id + '/delete', {}); t.body = t.body.filter(x => x.id !== n.id); }
+      if(a === 'ok' && ta.value.trim() && ta.value.trim() !== n.text){ const nn = await wbApi('/wb/task/' + t.id + '/note/' + n.id, { text: ta.value }); Object.assign(n, nn); }
+      wbSaveLocal(); wbRenderPage();
+    }catch(err){ wbFlash(err.message); }
+  });
+  p.addEventListener('click', e => e.stopPropagation(), { once: true });
+}
+
+/* ---- 写字：草稿、信 ---- */
+function wbGrow(ta){ ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
+['wbNoteIn', 'wbLetterIn'].forEach(id => wbEl(id).addEventListener('input', e => wbGrow(e.target)));
+wbEl('wbNoteSend').addEventListener('click', async () => {
+  const ta = wbEl('wbNoteIn'), v = ta.value.trim();
+  if(!v || !wbPageId || wbPageId === 'new') return;
+  try{
+    const n = await wbApi('/wb/task/' + wbPageId + '/note', { text: v });
+    const t = wb.tasks.find(x => x.id === wbPageId); t.body.push(n); wbSaveLocal();
+    ta.value = ''; wbGrow(ta); wbRenderPage();
+    const inner = wbEl('wbPageIn'); inner.scrollTop = inner.scrollHeight;
+  }catch(e){ wbFlash(e.message); }
+});
+wbEl('wbLetterSend').addEventListener('click', async () => {
+  const ta = wbEl('wbLetterIn'), v = ta.value.trim();
+  if(!v) return;
+  try{
+    const l = await wbApi('/wb/letter', { text: v });
+    wb.letters.push(l); wbSaveLocal(); ta.value = ''; wbGrow(ta); wbRender();
+    const back = wbEl('wbBack'); back.scrollTop = back.scrollHeight;
+  }catch(e){ wbFlash(e.message); }
+});
+
+/* ---- 翻面 ---- */
+function wbFlipTo(back){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  wbEl('wbSheet').classList.toggle('flipped', back);
+  if(back) setTimeout(() => { const b = wbEl('wbBack'); b.scrollTop = b.scrollHeight; }, 50); // 翻过来先看到最新的信
+}
+wbEl('wbFlip').addEventListener('click', () => wbFlipTo(true));
+wbEl('wbFlipBack').addEventListener('click', () => wbFlipTo(false));
+wbEl('wbPageClose').addEventListener('click', wbClosePage);
+
+/* ---- 分工一览 + 归档 ---- */
+function wbRenderCard(){
+  const box = wbEl('wbCardIn');
+  const live = wb.tasks.filter(t => t.status !== 'done');
+  const duty = who => live.filter(t => t[who]).sort(wbByStart).map(t => '<li><span class="t">' + wbEsc(t.title) + '</span> <span class="d">— ' + wbEsc(t[who]) + '</span></li>').join('') || '<li class="d">（还没有）</li>';
+  const done = wb.tasks.filter(t => t.status === 'done').sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  box.innerHTML = '<div class="wb-head" style="margin-bottom:8px"><h1 style="font-size:20px">Who does what</h1><span class="sub">分工</span></div>' +
+    ['claude', 'muse'].map(w => '<h3><span class="wb-who ' + w + '">' + WB_NAME[w] + '</span></h3>' +
+      '<textarea rows="1" data-r="' + w + '" placeholder="平时归 ' + WB_NAME[w] + ' 管的事">' + wbEsc((wb.roles || {})[w]) + '</textarea>' +
+      '<ul>' + duty(w) + '</ul>').join('') +
+    '<h3 style="margin-top:20px">Archive <span class="wb-ts" style="font-family:Noto Serif SC;letter-spacing:.15em">做完的事</span></h3>' +
+    (done.length ? '<ul>' + done.map(t => '<li class="arch-row"><button class="t" data-open="' + t.id + '">' + wbEsc(t.title) + '</button><button data-back="' + t.id + '">放回去</button></li>').join('') + '</ul>' : '<ul><li class="d">（还没有）</li></ul>') +
+    '<h3 style="margin-top:20px">Torn out <span class="wb-ts" style="font-family:Noto Serif SC;letter-spacing:.15em">撕掉的</span></h3><ul id="wbTorn"><li class="d">……</li></ul>';
+  // 撕掉的页在后端回收站里，打开这张纸条时去取
+  wbApi('/wb/torn').then(list => {
+    const ul = wbEl('wbTorn'); if(!ul) return;
+    ul.innerHTML = list.length ? list.map(x => '<li class="arch-row"><span class="t">' + wbEsc(x.title) + ' <span class="wb-ts">' + wbStamp(x.ts) + ' 撕掉</span></span><button data-restore="' + x.id + '">放回去</button></li>').join('') : '<li class="d">（还没有）</li>';
+    ul.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', async () => {
+      try{ await wbApi('/wb/torn/' + b.dataset.restore + '/restore', {}); wb = await wbApi('/wb'); wbSaveLocal(); wbRender(); wbRenderCard(); wbFlash('放回去了'); }
+      catch(e){ wbFlash(e.message); }
+    }));
+  }).catch(() => { const ul = wbEl('wbTorn'); if(ul) ul.innerHTML = '<li class="d">（没取到，等一下再打开试试）</li>'; });
+  box.querySelectorAll('textarea').forEach(ta => {
+    wbGrow(ta);
+    ta.addEventListener('input', () => wbGrow(ta));
+    ta.addEventListener('change', async () => { try{ wb.roles = await wbApi('/wb/roles', { [ta.dataset.r]: ta.value }); wbSaveLocal(); }catch(e){ wbFlash(e.message); } });
+  });
+  box.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { wbEl('wbCard').classList.add('gone'); wbOpenPage(b.dataset.open); }));
+  box.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', async () => { try{ await wbSaveTask(b.dataset.back, { status: 'todo' }); wbRender(); }catch(e){ wbFlash(e.message); } }));
+}
+wbEl('wbRolesBtn').addEventListener('click', () => { wbRenderCard(); wbEl('wbCard').classList.remove('gone'); });
+wbEl('wbCardClose').addEventListener('click', () => { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); wbEl('wbCard').classList.add('gone'); });
+wbEl('wbCard').addEventListener('click', e => { if(e.target === wbEl('wbCard')) wbEl('wbCardClose').click(); });
+
+/* ---- 进出工作台 ---- */
+// 从封面推近到书桌上：封面朝她放大、淡出，下面是这张纸
+function enterWb(){
+  const w = wbEl('wb');
+  w.classList.remove('gone');
+  wbRender(); wbSync();
+  clearInterval(wbPoll); wbPoll = setInterval(() => { if(!w.classList.contains('gone') && document.visibilityState === 'visible') wbSync(); }, 30000);
+  if(startAnim){ startAnim.cancel(); startAnim = null; }
+  const done = () => { startEl.classList.add('gone'); startAnim = null; };
+  if(!startEl.animate || (reduceMotion && reduceMotion.matches)) return done();
+  startEl.style.transformOrigin = '62% 62%';
+  startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }], { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)' });
+  startAnim.onfinish = done;
+}
+function leaveWb(){ wbEl('wb').classList.add('gone'); clearInterval(wbPoll); wbPoll = null; }
 
 /* ---------- 初始化 ---------- */
 async function init(){
