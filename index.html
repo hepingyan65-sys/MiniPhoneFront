@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="小手机">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&family=IM+Fell+English&family=Noto+Serif+SC:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&family=IM+Fell+English:ital@0;1&family=Noto+Serif+SC:wght@500&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>小手机</title>
@@ -73,6 +73,57 @@
     background: linear-gradient(180deg, rgba(8,12,10,.72) 0%, rgba(8,12,10,.25) 30%, rgba(8,12,10,.15) 62%, rgba(8,12,10,.70) 100%);
   }
   .status{ height:26px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding: 6px 20px 0; font-size:11px; color: var(--ink-dim); }
+  /* 回封面的小拱门：放在每页大标题左边（状态栏那一行在 iPhone 上会被系统虚化，不好点）；点的范围 40×40 */
+  .to-start{ width:40px; height:40px; margin:-6px -6px -6px -10px; background:none; border:none; padding:0; color: var(--ink-dim); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex:none; -webkit-tap-highlight-color:transparent; }
+  .to-start svg{ width:18px; height:18px; }
+  .to-start-pad{ width:24px; flex:none; }
+
+  /* ---- 封面（启动页）：一张画，点窗边的他进 FromAlis，点书桌前的 Jes 进工作台 ----
+     画按 cover 铺满（手机比画更细长，左右会裁掉一点）；两个入口的位置是按"画"的百分比算的，
+     所以放在和画一样比例的 .start-art 里，屏幕再怎么变，入口都贴着人物 */
+  .start{ position:absolute; inset:12px; border-radius:26px; overflow:hidden; z-index:50; background:#050505; container-type:size; }
+  @media (max-width: 480px){ .start{ inset:0; border-radius:0; } }
+  .start.gone{ display:none; }
+  .start-art{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width: max(100cqw, calc(100cqh * 941 / 1672)); height: max(100cqh, calc(100cqw * 1672 / 941));
+    background: url('start.jpg') center / 100% 100% no-repeat;
+  }
+  /* 上下压一点暗，字和 Home 条附近不刺眼 */
+  .start::after{ content:''; position:absolute; inset:0; pointer-events:none;
+    background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 16%, rgba(0,0,0,0) 80%, rgba(0,0,0,.45) 100%); }
+  .start-spot{ position:absolute; background:none; border:none; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .start-spot.alis{ left:11%; top:18%; width:35%; height:44%; z-index:2; }
+  .start-spot.desk{ left:24%; top:40%; width:72%; height:50%; z-index:1; }
+  .start-spot:active{ transform:none; } /* 整片点击区不缩，只让字缩一下 */
+  /* 入口的字：› + 斜体英文，下面一根很细的线，线下一行小中文。像书里的章节名，不像网页链接 */
+  .start-label{ position:absolute; display:flex; flex-direction:column; align-items:flex-start; color: var(--st-ink); white-space:nowrap;
+    text-shadow: 0 1px 12px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7); transition: transform .45s cubic-bezier(.3,1.6,.5,1); }
+  .start-spot:active .start-label{ transform:scale(.95); transition-duration:.12s; }
+  .start-label .en{ font-family: var(--name-font); font-style:italic; font-size:18px; line-height:1; letter-spacing:.03em; display:flex; align-items:baseline; gap:6px; padding:0 2px 1px 0; } /* 字贴着线，像在横线上签名 */
+  .start-label .en i{ font-style:normal; font-family: -apple-system, sans-serif; font-weight:300; font-size:15px; color: var(--st-arrow); }
+  .start-label .rule{ align-self:stretch; height:1px; background: linear-gradient(90deg, var(--st-ink) 0%, var(--st-ink) 65%, transparent 100%); opacity:.38; } /* 0.5px 在 iPhone 上有时会被吞掉，用 1px 调淡 */
+  .start-label .zh{ font-family: "Noto Serif SC", serif; font-size:9px; color: var(--st-sub); letter-spacing:.24em; padding:5px 0 0 15px; }
+  /* 他在远景：字淡一点、偏冷，像隔着窗边的雾；你在近景：字亮一点、暖一点，像台灯照着 */
+  /* 远的不是"更暗"，而是"更亮、更灰白、对比更低"（空气透视）：字调成发冷的浅雾白，去掉压暗的黑影，换成一圈淡淡的雾光 */
+  .start-spot.alis{ --st-ink: rgba(226,232,236,.86); --st-sub: rgba(214,222,228,.70); --st-arrow: rgba(222,212,186,.80); }
+  .start-spot.alis .start-label{ text-shadow: 0 0 10px rgba(205,215,222,.30), 0 1px 6px rgba(0,0,0,.45); }
+  .start-spot.desk{ --st-ink: #F2E9D6; --st-sub: rgba(232,222,200,.78); --st-arrow: var(--lamp); }
+  .start-spot.alis .start-label{ left:4%; top:47%; }
+  .start-spot.desk .start-label{ right:5%; top:46%; }
+  /* 灯：有人发来新消息时亮起来、轻轻呼吸 */
+  .start-lamp{ width:5px; height:5px; border-radius:50%; background: var(--lamp); box-shadow: 0 0 8px 2px rgba(207,192,154,.55); display:none; align-self:center; margin-left:2px; }
+  .start-spot.lit .start-lamp{ display:block; animation: lampBreath 2.8s ease-in-out infinite; }
+  @keyframes lampBreath{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+  /* 点下去"哗啦"散开的光点 */
+  .spark{ position:absolute; width:3.5px; height:3.5px; border-radius:50%; pointer-events:none; z-index:4;
+    background: #F4E7C4; box-shadow: 0 0 6px 1.5px rgba(232,212,160,.75); }
+  .start-toast{ position:absolute; left:50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); z-index:3;
+    font-size:11px; letter-spacing:.12em; color: var(--ink-dim); background: rgba(10,10,10,.55); border:1px solid rgba(255,255,255,.08);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); padding:7px 14px; border-radius:20px; white-space:nowrap;
+    opacity:0; transition: opacity .35s; pointer-events:none; }
+  .start-toast.show{ opacity:1; }
 
   /* ---- 顶部各tab的header ---- */
   .header{ display:flex; align-items:center; gap:12px; padding: 8px 16px 14px; border-bottom: 1px solid var(--glass-edge); flex-shrink:0;
@@ -392,7 +443,7 @@
     <div class="panels">
       <!-- 动态 -->
       <div class="panel" id="panel-moments">
-        <div class="header"><div class="plain-title">Moments</div></div>
+        <div class="header"><button class="to-start" aria-label="回到封面"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10a6 6 0 0 1 12 0v10"/><path d="M4 20h16"/><path d="M12 4v16"/></svg></button><div class="plain-title">Moments</div><span class="to-start-pad"></span></div>
         <div class="moments-body" id="momentsBody">
           <div class="feed-compose">
             <textarea id="feedInput" placeholder="这一刻的想法……"></textarea>
@@ -414,7 +465,7 @@
       <div class="panel active" id="panel-chat">
        <!-- 联系人列表：点进去才是聊天 -->
        <div id="contactsView" style="display:flex; flex-direction:column; position:absolute; inset:0;">
-        <div class="header"><div class="plain-title">Messages</div></div>
+        <div class="header"><button class="to-start" aria-label="回到封面"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10a6 6 0 0 1 12 0v10"/><path d="M4 20h16"/><path d="M12 4v16"/></svg></button><div class="plain-title">Messages</div><span class="to-start-pad"></span></div>
         <div class="contacts-list" id="contactsList"></div>
        </div>
        <!-- 资料页（群里短按头像） -->
@@ -463,7 +514,7 @@
 
       <!-- 设置 -->
       <div class="panel" id="panel-settings">
-        <div class="header"><div class="plain-title">Settings</div></div>
+        <div class="header"><button class="to-start" aria-label="回到封面"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10a6 6 0 0 1 12 0v10"/><path d="M4 20h16"/><path d="M12 4v16"/></svg></button><div class="plain-title">Settings</div><span class="to-start-pad"></span></div>
         <div class="settings-body">
           <div class="settings-section">
             <h4>连接</h4>
@@ -502,6 +553,23 @@
       <button class="tab-btn" data-tab="settings"><span class="icon"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h9.5M18.5 7.5H20M4 16.5h2.5M11.5 16.5H20"/><circle cx="16" cy="7.5" r="2.3"/><circle cx="9" cy="16.5" r="2.3"/></svg></span>设置</button>
     </div>
   </div>
+
+  <!-- 封面：打开 App 先看到这里 -->
+  <div class="start" id="start">
+    <div class="start-art">
+      <button class="start-spot alis" id="spotAlis" aria-label="进入 FromAlis">
+        <span class="start-label"><span class="en"><i>›</i>FromAlis<span class="start-lamp"></span></span><span class="rule"></span><span class="zh">伦敦来信</span></span>
+      </button>
+      <button class="start-spot desk" id="spotDesk" aria-label="进入 Jes 的工作台">
+        <span class="start-label"><span class="en"><i>›</i>Workbench</span><span class="rule"></span><span class="zh">Jes 的工作台</span></span>
+      </button>
+    </div>
+    <div class="start-toast" id="startToast">工作台还在搭建中</div>
+  </div>
+  <script>
+    // 点推送打开的（地址带 #alis）：不停在封面，直接进 FromAlis
+    if(location.hash === '#alis'){ document.getElementById('start').classList.add('gone'); history.replaceState(null, '', location.pathname + location.search); }
+  </script>
 </div>
 
 <script>
@@ -835,6 +903,7 @@ function renderContacts(){
     contactsListEl.appendChild(row);
   });
   chatTabDot.style.display = anyUnread ? 'block' : 'none';
+  document.getElementById('spotAlis').classList.toggle('lit', anyUnread); // 封面上他那盏小灯
 }
 
 function openConv(cid){
@@ -2063,6 +2132,64 @@ async function migrateLegacyIfNeeded(){
   await api('/import', { method: 'POST', body: { history: items, memories }, timeout: 90000 });
   save.thumbs();
   localStorage.setItem('mp_migrated_v2', '1');
+}
+
+/* ---------- 封面（启动页） ---------- */
+// 封面盖在 FromAlis 上面：进去时封面朝他放大、淡出；回来时封面淡回来。FromAlis 一直在下面跑着（轮询、未读照常）
+const startEl = document.getElementById('start');
+let startAnim = null;
+function enterAlis(animate){
+  if(startEl.classList.contains('gone')) return;
+  if(startAnim){ startAnim.cancel(); startAnim = null; }
+  const done = () => { startEl.classList.add('gone'); startAnim = null; placeLamp(false); };
+  if(animate === false || !startEl.animate || (reduceMotion && reduceMotion.matches)) return done();
+  startEl.style.transformOrigin = '30% 38%'; // 朝窗边的他推进去
+  startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }],
+    { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)' });
+  startAnim.onfinish = done;
+}
+function showStart(){
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); // 收起键盘
+  if(startAnim){ startAnim.cancel(); startAnim = null; }
+  startEl.classList.remove('gone');
+  if(!startEl.animate || (reduceMotion && reduceMotion.matches)) return;
+  startEl.style.transformOrigin = '50% 50%';
+  startAnim = startEl.animate([{ opacity: 0, transform: 'scale(1.06)' }, { opacity: 1, transform: 'scale(1)' }],
+    { duration: 420, easing: 'cubic-bezier(.2,.8,.3,1)' });
+  startAnim.onfinish = () => { startAnim = null; };
+}
+// 点入口：从那根细线上"哗啦"散出一小把光点，往上飘、慢慢熄掉
+function sparkle(spot){
+  if(!startEl.animate || (reduceMotion && reduceMotion.matches)) return;
+  const box = startEl.getBoundingClientRect(), r = spot.querySelector('.rule').getBoundingClientRect();
+  for(let i = 0; i < 24; i++){
+    const d = document.createElement('span'); d.className = 'spark';
+    const x = r.left - box.left + Math.random() * r.width, y = r.top - box.top;
+    d.style.left = x + 'px'; d.style.top = y + 'px';
+    startEl.appendChild(d);
+    const dx = (Math.random() - .5) * 70, dy = -(12 + Math.random() * 46), s = .5 + Math.random() * .8;
+    d.animate([
+      { transform: 'translate(0,0) scale(' + s + ')', opacity: 0 },
+      { transform: 'translate(' + dx * .3 + 'px,' + dy * .3 + 'px) scale(' + s + ')', opacity: 1, offset: .15 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(0.2)', opacity: 0 }
+    ], { duration: 650 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.3,1)', delay: Math.random() * 90 }).onfinish = () => d.remove();
+  }
+}
+let toastTimer = null;
+document.getElementById('spotAlis').addEventListener('click', e => {
+  sparkle(e.currentTarget);
+  setTimeout(() => enterAlis(true), 220); // 先让光点散开一下再推进去
+});
+document.getElementById('spotDesk').addEventListener('click', e => {
+  sparkle(e.currentTarget);
+  const t = document.getElementById('startToast'); // 工作台阶段二再做
+  t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+});
+document.querySelectorAll('.to-start').forEach(b => b.addEventListener('click', showStart));
+// App 开着时点了推送：Service Worker 发来 open: 'alis'，从封面直接进去
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message', e => { if(e.data && e.data.open === 'alis') enterAlis(false); });
 }
 
 /* ---------- 初始化 ---------- */
