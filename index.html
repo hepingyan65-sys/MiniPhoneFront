@@ -110,8 +110,11 @@
   .start-spot.alis{ --st-ink: rgba(226,232,236,.86); --st-sub: rgba(214,222,228,.70); --st-arrow: rgba(222,212,186,.80); }
   .start-spot.alis .start-label{ text-shadow: 0 0 10px rgba(205,215,222,.30), 0 1px 6px rgba(0,0,0,.45); }
   .start-spot.desk{ --st-ink: #F2E9D6; --st-sub: rgba(232,222,200,.78); --st-arrow: var(--lamp); }
-  .start-spot.alis .start-label{ left:4%; top:47%; }
-  .start-spot.desk .start-label{ right:5%; top:46%; }
+  /* 字的位置跟着画走，但屏幕越细长、画左右被裁得越多：保证字离屏幕边至少 14px，不跑出去
+     --art-w 是画的宽，--crop 是一边被裁掉多少（cqw/cqh 指封面 .start 的宽高） */
+  .start-spot{ --art-w: max(100cqw, calc(100cqh * 941 / 1672)); --crop: calc((var(--art-w) - 100cqw) / 2); }
+  .start-spot.alis .start-label{ top:47%; left: max(4%, calc(var(--crop) - var(--art-w) * .11 + 14px)); }   /* 他的点击区从画的 11% 开始 */
+  .start-spot.desk .start-label{ top:46%; right: max(5%, calc(var(--crop) - var(--art-w) * .04 + 14px)); } /* 你的点击区到画的 96% 为止 */
   /* 灯：有人发来新消息时亮起来、轻轻呼吸 */
   .start-lamp{ width:5px; height:5px; border-radius:50%; background: var(--lamp); box-shadow: 0 0 8px 2px rgba(207,192,154,.55); display:none; align-self:center; margin-left:2px; }
   .start-spot.lit .start-lamp{ display:block; animation: lampBreath 2.8s ease-in-out infinite; }
