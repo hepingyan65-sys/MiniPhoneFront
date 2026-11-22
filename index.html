@@ -253,6 +253,14 @@
   /* 长按消息：按住时气泡慢慢往里收，菜单弹出那一刻（或中途松手）"啵"地弹回 */
   .bubble, .mini-av{ transition: transform .34s cubic-bezier(.3,1.6,.5,1); }
   .bubble.pressing, .mini-av.pressing{ transform: scale(.93); transition: transform .33s ease-out; }
+  /* 「↑ 12 条新消息」：新消息多到超过一屏时，从右边滑出来，点一下跳到第一条新消息 */
+  .unread-pill{ position:absolute; right:12px; z-index:5; display:flex; align-items:center; gap:5px;
+    padding:6px 12px 6px 10px; border-radius:16px; font-size:12px; font-family:inherit; color: var(--lamp); cursor:pointer;
+    background: rgba(18,26,21,.78); border:1px solid rgba(207,192,154,.28); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    opacity:0; transform: translateX(24px); pointer-events:none; transition: opacity .3s, transform .45s cubic-bezier(.3,1.35,.5,1); }
+  .unread-pill.show{ opacity:1; transform:none; pointer-events:auto; }
+  .unread-pill svg{ width:13px; height:13px; }
   .bubble.flash{ box-shadow: 0 0 0 2px var(--lamp) !important; transition: box-shadow .3s; }
   .row.has-quote{ flex-direction:column; align-items:flex-start; gap:4px; }
   .row.me.has-quote{ align-items:flex-end; }
@@ -651,6 +659,7 @@
           </div>
         </div>
         <div class="chat" id="chat"></div>
+        <button class="unread-pill" id="unreadPill"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg><span id="unreadPillText"></span></button>
         <div class="reply-bar" id="replyBar" style="display:none;">
           <span class="reply-text" id="replyText"></span>
           <button id="cancelReplyBtn">×</button>
@@ -1109,10 +1118,12 @@ function openConv(cid){
   av.classList.add('avatar');
   convAvatarBox.appendChild(av);
   renderStatus();
+  const prevRead = readAt[cid] || 0; // 标成已读之前，先记下上次看到哪儿
   convView.style.display = 'flex'; // 先显示出来才能滚到最底下；联系人列表交给 pushView 淡出
   renderChat();
   pushView(convView, contactsView, true);
   updateBg();
+  showUnreadPill(cid, prevRead);
   markRead(cid);
   renderContacts();
   syncMessages(cid);
@@ -1120,6 +1131,7 @@ function openConv(cid){
 function closeConv(fromDrag = false){
   if(!currentConv) return;
   closeMsgMenu();
+  hideUnreadPill();
   currentConv = null;
   renderContacts();
   pushView(contactsView, convView, false, fromDrag);
@@ -1381,6 +1393,7 @@ function addBubble(container, role, text, imageDataUrl, opts = {}){
     q.addEventListener('click', () => jumpToMessage(opts.replyTo));
     holder.appendChild(q);
   }
+  if(opts.id) row.dataset.id = opts.id; // 只有动作、没有气泡的消息也找得到（跳到第一条新消息时用）
   if(bulkPaint) row.classList.add('settled');
   container.appendChild(row);
   if(!bulkPaint) container.scrollTop = container.scrollHeight;
@@ -1825,7 +1838,54 @@ function loadOlder(){
   firstShownId = h[from].id;
   loadingOlder = false;
 }
-chatEl.addEventListener('scroll', () => { if(chatEl.scrollTop < 300) loadOlder(); }, { passive: true });
+let jumpingUntil = 0; // 点「↑ N 条新消息」平滑滚过去的那一会儿，先不自动接更早的消息（会把滚动打断）
+chatEl.addEventListener('scroll', () => { if(chatEl.scrollTop < 300 && Date.now() > jumpingUntil) loadOlder(); }, { passive: true });
+
+// 「↑ N 条新消息」：点进聊天时，新消息多到第一条不在屏幕里，就在右上角给一个小胶囊，点一下跳过去
+const unreadPill = document.getElementById('unreadPill');
+const unreadPillText = document.getElementById('unreadPillText');
+let pillTarget = null; // 第一条新消息的 id
+const rowOf = (id) => chatEl.querySelector('.row[data-id="' + id + '"]');
+function hideUnreadPill(){ pillTarget = null; unreadPill.classList.remove('show'); }
+function showUnreadPill(cid, prevRead){
+  hideUnreadPill();
+  const unread = historyOf(cid).filter(m => m.role !== 'user' && m.ts > prevRead);
+  if(!unread.length) return;
+  // 第一条新消息：还没画出来的（比画出来的最早那条还早）照样算；画到了却不显示的（只有动作、关了动作描写）跳过
+  const h = historyOf(cid);
+  const shownFrom = Math.max(0, h.findIndex(m => m.id === firstShownId));
+  const first = unread.find(m => h.indexOf(m) < shownFrom || rowOf(m.id));
+  if(!first) return;
+  const el = rowOf(first.id);
+  if(el && el.getBoundingClientRect().top >= chatEl.getBoundingClientRect().top) return; // 一屏看得全：不用提示
+  pillTarget = first.id;
+  unreadPillText.textContent = (unread.length > 99 ? '99+' : unread.length) + ' 条新消息';
+  unreadPill.style.top = (chatEl.offsetTop + 10) + 'px';
+  unreadPill.classList.add('show');
+}
+unreadPill.addEventListener('click', () => {
+  if(!pillTarget || !currentConv) return hideUnreadPill();
+  const h = historyOf(currentConv);
+  const i = h.findIndex(m => m.id === pillTarget);
+  if(i < 0) return hideUnreadPill();
+  if(!rowOf(pillTarget)){ firstShownId = h[Math.max(0, i - 12)].id; renderChat(); } // 太早了还没画出来：先补画到那里（多带一些上文）
+  const el = rowOf(pillTarget);
+  hideUnreadPill();
+  if(!el) return;
+  jumpingUntil = Date.now() + 1000;
+  const goal = chatEl.scrollTop + el.getBoundingClientRect().top - chatEl.getBoundingClientRect().top - 12;
+  // 离得很远：先瞬间跳到目标下面一屏的地方，再平滑滚完最后这一屏（不然一路刷过上百条，又慢又晕）
+  if(chatEl.scrollTop - goal > chatEl.clientHeight * 1.5) chatEl.scrollTop = goal + chatEl.clientHeight;
+  chatEl.scrollTo({ top: goal, behavior: 'smooth' });
+  const b = el.querySelector('.bubble');
+  if(b){ b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 1400); }
+});
+// 自己往上翻、第一条新消息露出来了：胶囊收起
+chatEl.addEventListener('scroll', () => {
+  if(!pillTarget) return;
+  const el = rowOf(pillTarget);
+  if(el && el.getBoundingClientRect().top >= chatEl.getBoundingClientRect().top) hideUnreadPill();
+}, { passive: true });
 let emptyNote = null;
 
 // 去后端拉某个对话的新消息
