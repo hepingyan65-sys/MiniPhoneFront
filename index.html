@@ -184,6 +184,9 @@
   .who .name{ font-family: var(--name-font); font-size:18px; color: var(--ink); }
   .who .name.cjk{ font-size:15px; letter-spacing:.02em; }
   .who .status-line{font-size:11px; color: var(--moon); margin-top:2px;}
+  /* 他正在输入：状态行换成「正在输入…」，字慢慢一明一暗 */
+  .who .status-line.typing{ color: var(--lamp); animation: typingBreath 1.6s ease-in-out infinite; }
+  @keyframes typingBreath{ 50%{ opacity:.45; } }
   .plain-title{ font-family: var(--title-font); font-weight:500; font-size:22px; letter-spacing:.08em; text-align:center; padding:2px 0; color: var(--ink); flex:1; }
 
   /* ---- 三个面板容器 ---- */
@@ -995,19 +998,21 @@ const statuses = {};   // 每个对话最近一次拿到的状态
 const liveUntil = {};  // 每个对话"他在线、要看得勤一点"到什么时候
 function renderStatus(){
   const status = currentConv && statuses[currentConv];
+  statusLineEl.classList.remove('typing');
   if(!status){ statusLineEl.textContent = '伦敦'; return; }
   if(status.group){
     statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + (status.awake ? status.awake + ' 人醒着' : '大家都睡了');
     return;
   }
-  const label = status.online ? '在线' : (ACTIVITY_LABEL[status.activity] || '');
+  const label = status.typing ? '正在输入…' : status.online ? '在线' : (ACTIVITY_LABEL[status.activity] || '');
   statusLineEl.textContent = '伦敦 ' + status.time + ' · ' + label;
+  statusLineEl.classList.toggle('typing', !!status.typing);
 }
 function updateStatus(cid, status){
   if(!status) return;
   statuses[cid] = status;
   // 他在线的时候前端看得勤一点，免得他回了你半天才看到
-  if(status.online) liveUntil[cid] = Date.now() + 3 * 60 * 1000;
+  if(status.online || status.typing) liveUntil[cid] = Date.now() + 3 * 60 * 1000;
   if(cid === currentConv) renderStatus();
 }
 
@@ -1991,7 +1996,8 @@ setInterval(() => {
   const now = Date.now();
   chatIds().forEach(cid => {
     const fast = cid === currentConv && now < (liveUntil[cid] || 0);
-    if(now - (lastSyncAt[cid] || 0) >= (fast ? 4000 : 15000)) syncMessages(cid);
+    const typing = fast && statuses[cid] && statuses[cid].typing; // 他正在打字：拉得更勤，「正在输入」和打完的消息都能马上出来
+    if(now - (lastSyncAt[cid] || 0) >= (typing ? 2000 : fast ? 4000 : 15000)) syncMessages(cid);
   });
 }, 2000);
 document.addEventListener('visibilitychange', () => {
