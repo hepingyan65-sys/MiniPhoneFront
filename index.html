@@ -640,6 +640,20 @@
     #contactsView{ display:flex !important; right:auto !important; width: var(--side-w); border-right:1px solid var(--glass-edge); background: rgba(8,12,10,.30); }
     #convView, .profile{ left: var(--side-w) !important; }
     #backBtn{ display:none; } /* 联系人一直在左边，不用返回 */
+    /* 中间这条线可以拖：左栏最宽 340px，拖窄了名字和预览显示省略号，再往里拖就"啪"地收成一列头像（JS 的 setSideW()） */
+    .side-drag{ display:block; position:absolute; top:0; bottom:0; left: calc(var(--side-w) - 5px); width:10px; z-index:45; cursor:col-resize; touch-action:none; }
+    .side-drag::after{ content:''; position:absolute; top:0; bottom:0; left:4px; width:2px; border-radius:1px; background: var(--lamp); opacity:0; transition: opacity .2s; }
+    .side-drag:hover::after, body.side-dragging .side-drag::after{ opacity:.5; }
+    body.side-dragging{ cursor:col-resize; user-select:none; -webkit-user-select:none; }
+    .contact-row .c-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* 收成一列头像：只剩头像，未读数挂在头像右上角；大标题让位给回封面的小拱门 */
+    .phone.side-compact #contactsView .plain-title, .phone.side-compact #contactsView .to-start-pad{ display:none; }
+    .phone.side-compact #contactsView .header{ justify-content:center; padding-left:0; padding-right:0; }
+    .phone.side-compact #contactsView .to-start{ margin:-6px 0; }
+    .phone.side-compact .contact-row{ position:relative; justify-content:center; padding:11px 0; }
+    .phone.side-compact .contact-row .c-main{ position:absolute; top:5px; right:5px; flex:none; }
+    .phone.side-compact .contact-row .c-top, .phone.side-compact .contact-row .c-last{ display:none; }
+    .phone.side-compact .contact-row .c-bottom{ margin:0; }
     .contact-row.current{ background: rgba(207,192,154,.11); border-color: rgba(207,192,154,.30); }
     .conv-empty{ display:flex; position:absolute; top:0; right:0; bottom:0; left: var(--side-w); flex-direction:column; align-items:center; justify-content:center; gap:10px; pointer-events:none; }
     #panel-chat.has-conv .conv-empty{ display:none; }
@@ -716,6 +730,8 @@
           <button class="p-btn" id="profileChatBtn">发消息</button>
         </div>
        </div>
+       <!-- 电脑上：左右两栏中间可以拖的那条线 -->
+       <div class="side-drag" id="sideDrag" aria-hidden="true"></div>
        <!-- 电脑上右边还没选人时 -->
        <div class="conv-empty" aria-hidden="true"><div class="lamp"></div><div class="en">FromAlis</div><div class="zh">从左边选一个人</div></div>
        <!-- 和某个人的聊天 -->
@@ -1174,6 +1190,7 @@ function renderContacts(){
     }
     main.appendChild(top); main.appendChild(bottom);
     row.appendChild(img); row.appendChild(main);
+    row.title = contactName(cid); // 电脑上收成一列头像时，鼠标停上去能看到是谁
     if(ok) row.addEventListener('click', () => openConv(cid));
     contactsListEl.appendChild(row);
   });
@@ -1254,6 +1271,39 @@ function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   };
 }
 document.getElementById('backBtn').addEventListener('click', () => closeConv());
+
+// 电脑上：拖中间那条线调左栏宽度。最宽 340px；窄到 180px 为止名字、预览显示省略号；
+// 再往里拖过 140px 就"啪"地收成一列头像（98px）。宽度存在 mp_side_w，下次打开还是这个宽度
+const SIDE_MAX = 340, SIDE_TEXT_MIN = 180, SIDE_SNAP = 140, SIDE_COMPACT = 98;
+const phoneEl = document.querySelector('.phone');
+function setSideW(x){
+  const compact = x < SIDE_SNAP;
+  const w = compact ? SIDE_COMPACT : Math.round(Math.max(SIDE_TEXT_MIN, Math.min(SIDE_MAX, x)));
+  phoneEl.style.setProperty('--side-w', w + 'px');
+  phoneEl.classList.toggle('side-compact', compact);
+  return w;
+}
+let sideW = SIDE_MAX;
+try { const v = parseInt(localStorage.getItem('mp_side_w'), 10); if(v) sideW = setSideW(v); } catch(e){}
+const sideDrag = document.getElementById('sideDrag');
+sideDrag.addEventListener('pointerdown', (e) => {
+  if(e.button) return; // 只认左键（触屏的按下也是 0）
+  e.preventDefault();
+  sideDrag.setPointerCapture(e.pointerId);
+  document.body.classList.add('side-dragging');
+});
+sideDrag.addEventListener('pointermove', (e) => {
+  if(!sideDrag.hasPointerCapture(e.pointerId)) return;
+  sideW = setSideW(e.clientX - phoneEl.getBoundingClientRect().left);
+});
+function endSideDrag(e){
+  if(!sideDrag.hasPointerCapture(e.pointerId)) return;
+  sideDrag.releasePointerCapture(e.pointerId);
+  document.body.classList.remove('side-dragging');
+  try { localStorage.setItem('mp_side_w', String(sideW)); } catch(err){}
+}
+sideDrag.addEventListener('pointerup', endSideDrag);
+sideDrag.addEventListener('pointercancel', endSideDrag);
 
 // 从左边缘往右拖：聊天页跟着手指走，松手时拖过一半（或甩得够快）就退回联系人列表，不够就弹回来
 const EDGE_PX = 28;
