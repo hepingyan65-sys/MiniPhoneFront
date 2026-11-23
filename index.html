@@ -569,7 +569,13 @@
     font-family:"Noto Serif SC", serif; font-size:12px; line-height:1.55; color: var(--ink); padding:4px; }
   .wbp-note .acts{ display:flex; gap:14px; justify-content:flex-end; font-size:11px; margin-top:2px; }
   .wbp-note .acts button{ color: var(--ink-soft) !important; }
-  .wbp-tear{ display:block; margin:26px 0 0; font-size:10px; letter-spacing:.2em; color: var(--ink-faint) !important; }
+  /* 直接在纸上接着写：最后一段下面就是写字的地方，没有框 */
+  .wbp-write{ display:flex; align-items:baseline; gap:2px; margin:0 0 7px; }
+  .wbp-write textarea{ flex:1; min-width:0; min-height:0; max-height:none; border:none; outline:none; background:transparent; resize:none; overflow:hidden; padding:0;
+    font-family:"Noto Serif SC", serif; font-size:12px; line-height:1.55; color: var(--ink); }
+  .wbp-write textarea::placeholder{ color: var(--ink-faint); }
+  .wbp-write.cont{ margin-top:-7px; } .wbp-write.cont .wb-who{ display:none; } /* 5 分钟内接着上一段写：不再署名，看起来就是同一段 */
+  .wbp-tear{ display:block; margin:44px 0 0; font-size:10px; letter-spacing:.2em; color: var(--ink-faint) !important; }
   /* 分工一览 + 归档：一张小纸条 */
   .wb-card{ position:absolute; z-index:6; inset:0; background: rgba(8,5,2,.62); display:flex; align-items:flex-start; justify-content:center; padding: calc(64px + env(safe-area-inset-top, 0px)) 26px 40px; }
   .wb-card .wb-face{ position:relative; inset:auto; width:100%; max-height:100%; box-shadow:0 14px 40px rgba(0,0,0,.6); transform: rotate(-.6deg); }
@@ -769,7 +775,6 @@
       <div class="wb-face" style="position:relative;height:100%"><div class="wb-margin"></div>
         <button class="wb-x" id="wbPageClose" aria-label="合上"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div class="wb-inner" id="wbPageIn"></div>
-        <div class="wb-pen" id="wbNotePen"><textarea id="wbNoteIn" rows="1" placeholder="在这页上写点什么……"></textarea><button id="wbNoteSend">写上</button></div>
       </div>
     </div>
     <div class="wb-card gone" id="wbCard">
@@ -2777,8 +2782,8 @@ function wbRenderPage(){
     '</div>' +
     (isNew ? '' : '<div class="wbp-subs" id="wbKids"></div>') +
     '<div class="wbp-notes" id="wbNotes"></div>' +
-    (isNew ? '' : '<button class="wbp-tear" id="wbTear">撕掉这一页</button>');
-  wbEl('wbNotePen').classList.toggle('gone', isNew);
+    (isNew ? '' : '<div class="wbp-write" id="wbWrite"><span class="wb-who jes">Jes：</span><textarea id="wbWriteIn" rows="1"></textarea></div>' +
+      '<button class="wbp-tear" id="wbTear">撕掉这一页</button>');
 
   // 标题：新的一件事写了标题才真正存下来
   const titleIn = wbEl('wbTitleIn');
@@ -2827,10 +2832,11 @@ function wbRenderPage(){
   const notes = wbEl('wbNotes');
   t.body.forEach(n => {
     const p = document.createElement('div'); p.className = 'wbp-note';
-    p.innerHTML = '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt ? ' 改过' : '') + '</span>';
+    p.innerHTML = '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>';
     p.addEventListener('click', () => wbEditNote(t, n, p));
     notes.appendChild(p);
   });
+  wbWriteSetup(t);
   wbEl('wbTear').addEventListener('click', async () => {
     if(!confirm('把「' + t.title + '」这一页撕掉？' + (kids.length ? '\n挂在它下面的小事不会删，会变成单独的事。' : '') + '\n（后端回收站里还留着，找得回来）')) return;
     try{ await wbApi('/wb/task/' + t.id + '/delete', {}); wb.tasks = wb.tasks.filter(x => x.id !== t.id).map(x => x.parent === t.id ? Object.assign({}, x, { parent: '' }) : x); wbSaveLocal(); wbClosePage(); }
@@ -2862,17 +2868,62 @@ function wbParas(text){
   return wbEsc(parts[0]) + parts.slice(1).map(p => '<span class="wb-p">' + wbEsc(p) + '</span>').join('');
 }
 function wbGrow(ta){ ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
-['wbNoteIn', 'wbLetterIn'].forEach(id => wbEl(id).addEventListener('input', e => wbGrow(e.target)));
-wbEl('wbNoteSend').addEventListener('click', async () => {
-  const ta = wbEl('wbNoteIn'), v = ta.value.trim();
-  if(!v || !wbPageId || wbPageId === 'new') return;
-  try{
-    const n = await wbApi('/wb/task/' + wbPageId + '/note', { text: v });
-    const t = wb.tasks.find(x => x.id === wbPageId); t.body.push(n); wbSaveLocal();
-    ta.value = ''; wbGrow(ta); wbRenderPage();
-    const inner = wbEl('wbPageIn'); inner.scrollTop = inner.scrollHeight;
-  }catch(e){ wbFlash(e.message); }
-});
+wbEl('wbLetterIn').addEventListener('input', e => wbGrow(e.target));
+
+/* ---- 在这一页上直接接着写 ----
+   最后一段是 Jes 写的、中间没人插话、离她上次落笔不到 5 分钟：新写的字接在那一段后面（另起一行，不再署名）；
+   不然就另起一段。没有「写上」按钮：停笔 5 秒存一次，点别处、合上这一页、切到后台时也存，不丢字。 */
+const WB_MERGE_MS = 5 * 60 * 1000;
+let wbDraft = null;      // { taskId, noteId, base, saved }：这一次在写的那一段
+let wbWriteQ = Promise.resolve(), wbWriteTimer = null;
+function wbWriteSetup(t){
+  const box = wbEl('wbWrite'), ta = wbEl('wbWriteIn');
+  if(!box) return;
+  const last = t.body[t.body.length - 1];
+  const cont = !!last && last.by === 'jes' && Date.now() - (last.editedAt || last.ts) < WB_MERGE_MS;
+  box.classList.toggle('cont', cont);
+  ta.placeholder = cont ? '接着写……' : (t.body.length ? '接着写……' : '在这页上写点什么……');
+  ta.addEventListener('focus', () => {
+    if(wbDraft && wbDraft.taskId === t.id) return;
+    const tt = wb.tasks.find(x => x.id === t.id) || t;        // 同步过就是新的一份：克克、Muse 刚写的也算进来
+    const l = tt.body[tt.body.length - 1];
+    const c = !!l && l.by === 'jes' && Date.now() - (l.editedAt || l.ts) < WB_MERGE_MS;
+    box.classList.toggle('cont', c);
+    wbDraft = { taskId: t.id, noteId: c ? l.id : null, base: c ? l.text : '', saved: '' };
+  });
+  ta.addEventListener('input', () => { wbFit(ta); clearTimeout(wbWriteTimer); wbWriteTimer = setTimeout(wbWriteSave, 5000); });
+  ta.addEventListener('blur', () => { clearTimeout(wbWriteTimer); wbWriteSave(true); });
+}
+// 存这一次写的字；done = 写完了（点了别处）：存好后把这一段画回纸上，编辑区清空
+function wbWriteSave(done){
+  wbWriteQ = wbWriteQ.then(async () => {
+    const ta = wbEl('wbWriteIn'), d = wbDraft;
+    if(!d) return;
+    const typed = ta && wbPageId === d.taskId ? ta.value.replace(/\s+$/, '') : d.saved;
+    const t = wb.tasks.find(x => x.id === d.taskId);
+    if(t && typed.trim() && typed !== d.saved){
+      const full = d.base ? d.base + '\n' + typed : typed;
+      try{
+        if(d.noteId){
+          const nn = await wbApi('/wb/task/' + t.id + '/note/' + d.noteId, { text: full });
+          const n = t.body.find(x => x.id === d.noteId); if(n) Object.assign(n, nn);
+        }else{
+          const n = await wbApi('/wb/task/' + t.id + '/note', { text: full });
+          t.body.push(n); d.noteId = n.id;
+        }
+        d.saved = typed; wbSaveLocal();
+      }catch(e){ wbFlash('没存上：' + e.message); return; } // 没存上就留着字，不清空
+    }
+    if(done){
+      wbDraft = null;
+      if(!d.saved || wbPageId !== d.taskId) return;           // 什么都没写：不重画，免得吃掉她正要点的那一下
+      if(!wbPageBusy()) return wbRenderPage();                // 把写好的这一段画回纸上，编辑区清空
+      if(ta){ ta.value = ''; wbFit(ta); }                     // 她已经在改别的段：先清空，下次同步时这一段会出现
+    }
+  });
+  return wbWriteQ;
+}
+document.addEventListener('visibilitychange', () => { if(document.hidden && wbDraft){ clearTimeout(wbWriteTimer); wbWriteSave(); } });
 wbEl('wbLetterSend').addEventListener('click', async () => {
   const ta = wbEl('wbLetterIn'), v = ta.value.trim();
   if(!v) return;
@@ -2952,7 +3003,7 @@ function enterWb(){
   startAnim = startEl.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }], { duration: 520, easing: 'cubic-bezier(.45,0,.25,1)' });
   startAnim.onfinish = done;
 }
-function leaveWb(){ wbEl('wb').classList.add('gone'); wbEl('wbSheet').classList.remove('flipped'); clearInterval(wbPoll); wbPoll = null; } // 离开时翻回正面，下次从封面进来先看到手头的事
+function leaveWb(){ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); wbEl('wb').classList.add('gone'); wbEl('wbSheet').classList.remove('flipped'); clearInterval(wbPoll); wbPoll = null; } // 离开时翻回正面，下次从封面进来先看到手头的事
 // 点了克克、Muse 写东西的推送：不管在哪，直接摊开这张纸（是信的话翻到背面），不播封面动画
 function openWbFromPush(back){
   if(startAnim){ startAnim.cancel(); startAnim = null; }
