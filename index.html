@@ -624,6 +624,47 @@
     transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s; }
   .wb-front, .wb-back{ container-type:size; } /* 让上面的标题量得到整张纸有多大 */
   .wb-inner.tucked > .wb-head{ transform: translateY(-110%); opacity:0; }
+
+  /* ==================== 电脑脸：宽屏（900px 以上：电脑、横着的 iPad） ====================
+     不再画手机框，铺满整个窗口。「信息」左右两栏（左边联系人，右边聊天，像微信电脑版）；
+     动态、设置、聊天的内容放在中间一栏，免得一行字太长。手机上（窄屏）这些都不生效 */
+  .conv-empty{ display:none; }
+  @media (min-width: 900px){
+    body{ padding:0; align-items:flex-start; }
+    .phone{ --side-w: 340px; width:100vw; height: var(--app-h, 100dvh); top: var(--app-top, 0px); border-radius:0; padding:0; box-shadow:none;
+      padding-top: env(safe-area-inset-top, 0px); }
+    .screen{ border-radius:0; }
+    .status{ display:none; } /* 假的手机状态栏，电脑上用不着 */
+    .tabbar{ align-self:center; width: min(380px, calc(100% - 28px)); margin-left:0; margin-right:0; }
+    /* 信息：两栏 */
+    #contactsView{ display:flex !important; right:auto !important; width: var(--side-w); border-right:1px solid var(--glass-edge); background: rgba(8,12,10,.30); }
+    #convView, .profile{ left: var(--side-w) !important; }
+    #backBtn{ display:none; } /* 联系人一直在左边，不用返回 */
+    .contact-row.current{ background: rgba(207,192,154,.11); border-color: rgba(207,192,154,.30); }
+    .conv-empty{ display:flex; position:absolute; top:0; right:0; bottom:0; left: var(--side-w); flex-direction:column; align-items:center; justify-content:center; gap:10px; pointer-events:none; }
+    #panel-chat.has-conv .conv-empty{ display:none; }
+    .conv-empty .lamp{ width:7px; height:7px; border-radius:50%; background: var(--lamp); box-shadow: 0 0 18px 6px rgba(207,192,154,.35); margin-bottom:10px; animation: lampBreath 2.8s ease-in-out infinite; }
+    .conv-empty .en{ font-family: var(--name-font); font-style:italic; font-size:26px; color: var(--ink); opacity:.85; }
+    .conv-empty .zh{ font-family:"Noto Serif SC", serif; font-size:12px; letter-spacing:.24em; color: var(--ink-dim); }
+    /* 中间一栏：聊天 720px，动态、设置 640px */
+    .chat, .inputbar, .reply-bar, .image-preview-bar{ padding-left: max(14px, calc(50% - 360px)); padding-right: max(14px, calc(50% - 360px)); }
+    .moments-body, .settings-body, .feed-cbar{ padding-left: max(14px, calc(50% - 320px)); padding-right: max(14px, calc(50% - 320px)); }
+    .toast{ left:auto; right:24px; width:360px; }
+    /* 封面：换成横版的画（start-wide.jpg，1672×941），一样按 cover 铺满；入口的位置按横版的人物重新摆 */
+    .start{ inset:0; border-radius:0; }
+    .start-art{ width: max(100cqw, calc(100cqh * 1672 / 941)); height: max(100cqh, calc(100cqw * 941 / 1672)); background-image: url('start-wide.jpg'); }
+    .start-spot{ --art-w: max(100cqw, calc(100cqh * 1672 / 941)); }
+    .start-spot.alis{ left:15%; top:8%; width:25%; height:70%; }
+    .start-spot.desk{ left:50%; top:22%; width:38%; height:65%; }
+    .start-spot.alis .start-label{ top:28%; left: max(88%, calc(var(--crop) - var(--art-w) * .15 + 14px)); } /* 他右边的窗前 */
+    .start-spot.alis .start-label{ text-shadow: 0 1px 10px rgba(0,0,0,.95), 0 0 3px rgba(0,0,0,.85), 0 0 18px rgba(0,0,0,.6); } /* 横版里字落在亮窗上：垫一圈深色才看得清 */
+    .start-label .en{ font-size:22px; } .start-label .en i{ font-size:18px; } .start-label .zh{ font-size:10.5px; } /* 大屏上字稍大一点 */
+    .start-spot.desk .start-label{ top:30%; right: max(-2%, calc(var(--crop) - var(--art-w) * .12 + 14px)); } /* 你右边的书架前 */
+    /* 工作台：书架铺满，纸放在桌子中间 */
+    .wb{ inset:0; border-radius:0; padding-top: env(safe-area-inset-top, 0px); }
+    .wb-stage, .wb-page{ padding-left: max(12px, calc(50% - 320px)); padding-right: max(12px, calc(50% - 320px)); }
+    .wb-card .wb-face{ max-width:560px; }
+  }
 </style>
 </head>
 <body>
@@ -675,6 +716,8 @@
           <button class="p-btn" id="profileChatBtn">发消息</button>
         </div>
        </div>
+       <!-- 电脑上右边还没选人时 -->
+       <div class="conv-empty" aria-hidden="true"><div class="lamp"></div><div class="en">FromAlis</div><div class="zh">从左边选一个人</div></div>
        <!-- 和某个人的聊天 -->
        <div id="convView" style="display:none; flex-direction:column; position:absolute; inset:0;">
         <div class="header">
@@ -917,6 +960,7 @@ fmtClock(); setInterval(fmtClock, 30000);
 function updateBg(){
   const inChat = !!currentConv && document.getElementById('panel-chat').classList.contains('active');
   document.querySelector('.screen').classList.toggle('in-chat', inChat);
+  document.getElementById('panel-chat').classList.toggle('has-conv', !!currentConv); // 电脑上：开着聊天就收起右边的空状态
 }
 // 底栏的灯：挪到选中的 Tab 后面（animate = false 时直接到位，比如刚打开、底栏刚重新出现）
 const tabLamp = document.getElementById('tabLamp');
@@ -1108,7 +1152,7 @@ function renderContacts(){
     const h = historyOf(cid);
     const last = h[h.length - 1];
     const row = document.createElement('div');
-    row.className = 'contact-row' + (ok ? '' : ' not-yet');
+    row.className = 'contact-row' + (ok ? '' : ' not-yet') + (cid === currentConv ? ' current' : ''); // current：电脑上左边标出正在聊的人
     const img = avatarFor(cid, 48);
     const main = document.createElement('div'); main.className = 'c-main';
     const top = document.createElement('div'); top.className = 'c-top';
@@ -1170,6 +1214,8 @@ function closeConv(fromDrag = false){
 // 两层都是半透明的雾玻璃，所以一边滑一边淡，免得滑到一半两层叠在一起看
 const PUSH_MS = 360, PUSH_EASE = 'cubic-bezier(.32,.72,0,1)'; // 像 iOS 原生翻页：起步快，慢慢停稳
 const reduceMotion = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const wideMQ = window.matchMedia ? matchMedia('(min-width: 900px)') : null; // 电脑脸（和 CSS 里的宽屏一致）
+const isWide = () => !!(wideMQ && wideMQ.matches);
 let pushAnims = [];
 const screenEl = document.querySelector('.screen');
 // fromDrag：右滑返回时手指松开，从两层现在的位置接着播（剩下的路越短，播得越快）
@@ -1188,7 +1234,8 @@ function pushView(entering, leaving, forward, fromDrag = false, remain = 1){
   screenEl.style.removeProperty('--bg-filter');
   screenEl.style.removeProperty('--bg-scale');
   entering.style.display = 'flex';
-  if(!entering.animate || (reduceMotion && reduceMotion.matches)){ leaving.style.display = 'none'; return; }
+  // 电脑上两栏并排：不推门，直接换（联系人列表由 CSS 一直留在左边）
+  if(!entering.animate || (reduceMotion && reduceMotion.matches) || isWide()){ leaving.style.display = 'none'; return; }
   front.style.zIndex = 2; back.style.zIndex = 1;
   leaving.style.pointerEvents = 'none';
   const out = { transform: 'translateX(100%)', opacity: 0 }, inn = { transform: 'translateX(0)', opacity: 1 };
@@ -1217,7 +1264,7 @@ function bgLook(f){
 }
 let drag = null; // { x0, y0, mode: 'wait' | 'drag', w, lastX, lastT, v }
 convView.addEventListener('touchstart', (e) => {
-  if(e.touches.length !== 1 || pushAnims.length) return;
+  if(e.touches.length !== 1 || pushAnims.length || isWide()) return; // 横着的 iPad：两栏并排，没有返回可拖
   const t = e.touches[0];
   const left = convView.getBoundingClientRect().left;
   if(t.clientX - left > EDGE_PX) return;
