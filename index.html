@@ -458,15 +458,20 @@
   .wb-top .t{ font-family: var(--title-font); font-size:14px; letter-spacing:.22em; }
   .wb-top .to-start{ position:absolute; left:6px; top:5px; margin:0; color: rgba(236,226,204,.6); }
   .wb-sync{ position:absolute; right:16px; font-size:10px; color: rgba(236,226,204,.45); letter-spacing:.1em; }
-  .wb-stage{ position:relative; z-index:1; flex:1; min-height:0; padding:0 12px calc(16px + env(safe-area-inset-bottom, 0px)); perspective:1600px; }
-  .wb-sheet{ position:relative; height:100%; transform-style:preserve-3d; transition: transform .9s cubic-bezier(.4,.1,.2,1); }
-  .wb-sheet.flipped{ transform: rotateY(180deg); }
+  .wb-stage{ position:relative; z-index:1; flex:1; min-height:0; padding:0 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  /* 翻面：两面各自转，不用 preserve-3d。平时朝上的那面完全没有 3D 变换，背过去的那面 visibility:hidden，
+     手指只摸得到看得见的那一面（以前背面叠在正面上面，iPhone 上正面划不动） */
+  .wb-sheet{ position:relative; height:100%; perspective:1600px; }
+  .wb-sheet > .wb-face{ backface-visibility:visible; -webkit-backface-visibility:visible;
+    transition: transform .9s cubic-bezier(.4,.1,.2,1), visibility 0s .3s; } /* .3 秒正好转到侧着，这时候换面 */
+  .wb-sheet.flipped .wb-front{ transform: rotateY(-180deg); visibility:hidden; }
+  .wb-sheet.flipped .wb-back{ transform:none; visibility:visible; }
   .wb-face{ position:absolute; inset:0; overflow:hidden; backface-visibility:hidden; -webkit-backface-visibility:hidden;
     clip-path: polygon(0.4% 0.3%,22% 0,48% .4%,73% 0,99.6% .3%,100% 18%,99.6% 44%,100% 71%,99.7% 99.6%,76% 100%,51% 99.6%,27% 100%,0.3% 99.7%,0 76%,.4% 52%,0 27%);
     /* 真的旧纸（Jes 挑的图）盖在上面；图没加载出来时，底下画出来的那张纸还在 */
     background: url('paper.jpg') center / cover no-repeat, linear-gradient(170deg, var(--paper), var(--paper-2)); }
   /* 图里自带颗粒、旧斑和折痕，以前 CSS 画的那些就不要了 */
-  .wb-back{ transform: rotateY(180deg); }
+  .wb-back{ transform: rotateY(180deg); visibility:hidden; }
   .wb-margin{ position:absolute; left:40px; top:0; bottom:0; width:1px; background: rgba(154,58,44,.35); z-index:1; pointer-events:none; }
   .wb-inner{ position:relative; z-index:1; height:100%; overflow-y:auto; overflow-x:hidden; overscroll-behavior-x:none; touch-action:pan-y; -webkit-overflow-scrolling:touch; padding:18px 18px 70px 50px; }
   .wb button{ font-family:inherit; color:inherit; background:none; border:none; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
@@ -481,6 +486,15 @@
   .wb-long::before{ content:''; position:absolute; left:0; top:3px; bottom:3px; width:2px; border-radius:1px; background: var(--red); opacity:.55; }
   .wb-long .r{ font-family: var(--name-font); font-size:11px; color: var(--ink-soft); margin-left:8px; }
   .wb-gap{ height:10px; }
+  /* 按天分开（右上角的按钮）：每段前面一条细线 + 小字，段和段之间多空一点 */
+  .wb-tools button.on svg{ stroke: var(--red); }
+  .wb-day{ display:flex; align-items:center; gap:8px; margin:16px 0 8px; font-size:10px; letter-spacing:.15em; color: var(--ink-soft); }
+  .wb-day::after{ content:''; flex:1; height:1px; background: var(--ink-faint); opacity:.7; }
+  .wb-day.late, .wb-day.today{ color: var(--red); }
+  .wb-day.today::after{ background: var(--red); opacity:.45; }
+  /* 今天的事：像用荧光笔淡淡涂过一道 */
+  .wb-task.today .title{ display:inline; -webkit-box-decoration-break:clone; box-decoration-break:clone; background: linear-gradient(180deg, transparent 55%, rgba(214,170,60,.38) 55%, rgba(214,170,60,.38) 92%, transparent 92%); }
+  .wb-task.late .date{ font-weight:600; }
   .wb-task{ position:relative; margin:0 0 11px; }
   .wb-task .date{ position:absolute; left:-48px; top:2px; width:40px; text-align:right; font-family: var(--name-font); font-size:11px; color: var(--red); white-space:nowrap; }
   .wb-task .row{ display:flex; align-items:flex-start; gap:7px; }
@@ -740,7 +754,7 @@
     <div class="wb-stage">
       <div class="wb-sheet" id="wbSheet">
         <div class="wb-face wb-front"><div class="wb-margin"></div>
-          <div class="wb-tools"><button id="wbRolesBtn" aria-label="分工一览"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg></button></div>
+          <div class="wb-tools"><button id="wbDaysBtn" aria-label="按天分开"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke-dasharray="2 2.6"/><path d="M4 6h5M4 18h5"/></svg></button><button id="wbRolesBtn" aria-label="分工一览"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg></button></div>
           <div class="wb-inner" id="wbFront"></div>
           <div class="wb-fold"></div><button class="wb-flip" id="wbFlip">翻过来 ›</button>
         </div>
@@ -2589,6 +2603,46 @@ function wbMeta(t, withGroup){
   return bits.join(' · ');
 }
 
+/* ---- 按天分开：过期了 / 今天 / 明天 / 这周 / 以后 / 没写日期（日本时间） ---- */
+let wbDays = false;
+try{ wbDays = localStorage.getItem('mp_wb_days') === '1'; }catch(_){}
+const WB_WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+function wbJpToday(){ // 日本今天的日期，'2026-11-23'
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+function wbAddDays(d, n){ const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
+function wbGroupByDay(items){
+  const today = wbJpToday(), tomorrow = wbAddDays(today, 1);
+  const wd = new Date(today + 'T00:00:00Z').getUTCDay();          // 0 = 周日
+  const sunday = wbAddDays(today, wd === 0 ? 0 : 7 - wd);           // 这周到周日为止
+  const label = (name, d) => name + ' · ' + wbDay(d) + ' ' + WB_WEEK[new Date(d + 'T00:00:00Z').getUTCDay()];
+  const g = {
+    late: { label: '过期了', cls: 'late', list: [] },
+    today: { label: label('今天', today), cls: 'today', list: [] },
+    tomorrow: { label: label('明天', tomorrow), cls: '', list: [] },
+    week: { label: '这周', cls: '', list: [] },
+    later: { label: '以后', cls: '', list: [] },
+    none: { label: '没写日期', cls: '', list: [] }
+  };
+  items.forEach(t => {
+    const s = wbDate(t.start), e = wbDate(t.end);
+    if(!s) return g.none.list.push(t);
+    if(s < today) return (e && e >= today ? g.today : g.late).list.push(t); // 跨到今天的还算今天
+    if(s === today) return g.today.list.push(t);
+    if(s === tomorrow) return g.tomorrow.list.push(t);
+    if(s <= sunday) return g.week.list.push(t);
+    g.later.list.push(t);
+  });
+  return Object.values(g).filter(x => x.list.length);
+}
+wbEl('wbDaysBtn').classList.toggle('on', wbDays);
+wbEl('wbDaysBtn').addEventListener('click', () => {
+  wbDays = !wbDays;
+  try{ localStorage.setItem('mp_wb_days', wbDays ? '1' : '0'); }catch(_){}
+  wbEl('wbDaysBtn').classList.toggle('on', wbDays);
+  wbRender();
+});
+
 /* ---- 正面：手头的事 ---- */
 function wbTaskRow(t, opts = {}){
   const div = document.createElement('div');
@@ -2616,6 +2670,7 @@ async function wbToggleDone(t, div, box){
 function wbRender(){
   const front = wbEl('wbFront'), back = wbEl('wbBack');
   wbEl('wbRolesBtn').classList.toggle('gone', wbLocked);
+  wbEl('wbDaysBtn').classList.toggle('gone', wbLocked);
   wbEl('wbFlip').classList.toggle('gone', wbLocked);
   if(wbLocked){
     front.innerHTML = '<div class="wb-head"><h1>Locked</h1><span class="sub">这张纸上了锁</span></div>' +
@@ -2647,7 +2702,13 @@ function wbRender(){
     });
     front.insertAdjacentHTML('beforeend', '<div class="wb-gap"></div>');
   }
-  items.forEach(t => front.appendChild(wbTaskRow(t)));
+  if(wbDays){
+    const groups = wbGroupByDay(items);
+    groups.forEach(g => {
+      front.insertAdjacentHTML('beforeend', '<div class="wb-day ' + g.cls + '">' + g.label + '</div>');
+      g.list.forEach(t => { const row = wbTaskRow(t); if(g.cls) row.classList.add(g.cls); front.appendChild(row); });
+    });
+  }else items.forEach(t => front.appendChild(wbTaskRow(t)));
   if(!live.length && !holds.length) front.insertAdjacentHTML('beforeend', '<div class="wb-empty">纸上还空着。</div>');
   const add = document.createElement('button'); add.className = 'wb-add'; add.textContent = '+ 写一件事';
   add.addEventListener('click', () => { wbNewParent = ''; wbOpenPage('new'); });
