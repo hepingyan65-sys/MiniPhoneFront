@@ -587,6 +587,11 @@
   .wb-card ul{ list-style:none; padding:0; margin:4px 0 0; font-size:11.5px; line-height:1.6; }
   .wb-card li{ margin:0 0 3px; }
   .wb-card li .t{ font-weight:600; } .wb-card li .d{ color: var(--ink-soft); }
+  /* 你不在的时候：克克、Muse 在哪几页上写了什么 */
+  #wbCatch{ z-index:7; }
+  .wb-catch h3 button{ font:inherit; color:inherit; background:none; border:none; padding:0; text-align:left; cursor:pointer; text-decoration: underline dotted rgba(0,0,0,.3); text-underline-offset:3px; }
+  .wb-catch li{ margin:0 0 7px; } .wb-catch li .d{ white-space:pre-line; }
+  .wb-catch .wb-ts{ margin-left:4px; }
   .wb-card .arch-row{ display:flex; align-items:baseline; gap:8px; }
   .wb-card .arch-row .t{ font-weight:400; color: var(--ink-soft); text-decoration: line-through; flex:1; text-align:left; }
   .wb-card #wbTorn .arch-row .t{ text-decoration:none; color: var(--ink-faint); }
@@ -613,6 +618,11 @@
   .toast .nm{ display:flex; align-items:baseline; gap:8px; font-family: var(--name-font); font-size:15px; line-height:1.2; }
   .toast .nm small{ font-family: -apple-system, sans-serif; font-size:10.5px; color: var(--ink-dim); margin-left:auto; white-space:nowrap; }
   .toast .pv{ font-size:12.5px; color: var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  /* 工作台的小弹窗：没有头像，换成纸上的一滴墨（克克赭红、Muse 墨蓝、两个人都有是紫灰的笔） */
+  .toast-ink{ display:none; width:36px; height:36px; border-radius:50%; flex:none; align-items:center; justify-content:center;
+    background: var(--paper); color: var(--c-jes); font-family: var(--name-font); font-style:italic; font-size:19px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+  .toast-ink.claude{ color: var(--c-claude); } .toast-ink.muse{ color: var(--c-muse); }
+  .toast.wbt img{ display:none; } .toast.wbt .toast-ink{ display:flex; }
   .toast .lamp-dot{ width:5px; height:5px; border-radius:50%; background: var(--lamp); box-shadow:0 0 8px 2px rgba(207,192,154,.5); flex:none; align-self:center; }
 
   /* 背面、某一页：写字的那一行占纸底下自己的一块，信/草稿只在上面滚动，不会再从输入栏底下穿过去 */
@@ -839,10 +849,13 @@
     <div class="wb-card gone" id="wbCard">
       <div class="wb-face"><button class="wb-x" id="wbCardClose" aria-label="收起"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="wb-inner" id="wbCardIn"></div></div>
     </div>
+    <div class="wb-card wb-catch gone" id="wbCatch">
+      <div class="wb-face"><button class="wb-x" id="wbCatchClose" aria-label="收起"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div class="wb-inner" id="wbCatchIn"></div></div>
+    </div>
   </div>
 
   <!-- App 里的小弹窗 -->
-  <div class="toast" id="toast" role="button" aria-live="polite"><img id="toastAv" alt=""><div class="tx"><div class="nm"><span id="toastName"></span><small id="toastMore"></small></div><div class="pv" id="toastPv"></div></div></div>
+  <div class="toast" id="toast" role="button" aria-live="polite"><span class="toast-ink" id="toastInk"></span><img id="toastAv" alt=""><div class="tx"><div class="nm"><span id="toastName"></span><small id="toastMore"></small></div><div class="pv" id="toastPv"></div></div></div>
 
   <!-- 封面：打开 App 先看到这里 -->
   <div class="start" id="start">
@@ -2589,10 +2602,10 @@ if('serviceWorker' in navigator){
 // 在工作台、封面、或者 FromAlis 的别的页面时，有人（私聊）发来消息：雾玻璃小卡片从顶上滑下来
 // 好几条一起来就叠成一张（显示最新那条和一共几条）；点一下进他的聊天，往上一划收起，4.5 秒后自己缩回去
 const toastEl = document.getElementById('toast');
-let toastCid = null, toastCount = 0, toastTimer = null, toastDrag = null;
+let toastCid = null, toastCount = 0, toastTimer = null, toastDrag = null, toastGo = null; // toastGo：工作台的弹窗点了去哪
 function showToast(cid, m, n){
   toastCount = toastEl.classList.contains('show') ? toastCount + n : n;
-  toastCid = cid;
+  toastCid = cid; toastGo = null; toastEl.classList.remove('wbt');
   document.getElementById('toastAv').src = CONTACT_INFO[cid].avatar || '';
   document.getElementById('toastName').textContent = contactName(cid);
   document.getElementById('toastMore').textContent = toastCount > 1 ? '共 ' + toastCount + ' 条' : '现在';
@@ -2605,6 +2618,7 @@ function armToast(){ clearTimeout(toastTimer); toastTimer = setTimeout(hideToast
 function hideToast(){ clearTimeout(toastTimer); toastEl.classList.remove('show', 'dragging'); toastEl.style.transform = ''; toastCount = 0; }
 // 点一下：从哪儿都直接进他的聊天
 function openFromToast(){
+  if(toastGo){ const go = toastGo; toastGo = null; hideToast(); return go(); }
   const cid = toastCid; hideToast();
   if(!cid) return;
   enterAlis(false); // 封面、工作台都收起来
@@ -2668,13 +2682,15 @@ async function wbApi(path, body){
 }
 function wbFlash(msg){ const el = wbEl('wbSync'); el.textContent = msg; clearTimeout(wbFlash.t); wbFlash.t = setTimeout(() => { el.textContent = ''; }, 2600); }
 
-async function wbSync(){
+// mode：'enter' 刚进工作台 / 'away' 刚打开 App 或从后台切回来 / 其他 = 开着的时候定时看一眼（见下面的 wbNotice）
+async function wbSync(mode){
   if(wbLocked) return wbRender();
   try{
     wb = await wbApi('/wb'); wbSaveLocal();
     wbRender();
     if(wbPageId && wbPageId !== 'new' && !wbPageBusy()) wbRenderPage();
-  }catch(e){ if(!wbLocked) wbFlash('没连上'); }
+  }catch(e){ if(!wbLocked) wbFlash('没连上'); return; }
+  wbNotice(mode);
 }
 // 正在这一页上打字、改东西时，不拿新数据把它重画掉
 const wbPageBusy = () => { const a = document.activeElement; return !!a && wbEl('wbPage').contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
@@ -3091,7 +3107,7 @@ wbEl('wbCard').addEventListener('click', e => { if(e.target === wbEl('wbCard')) 
 function enterWb(){
   const w = wbEl('wb');
   w.classList.remove('gone');
-  wbRender(); wbSync();
+  wbRender(); wbSync('enter');
   clearInterval(wbPoll); wbPoll = setInterval(() => { if(!w.classList.contains('gone') && document.visibilityState === 'visible') wbSync(); }, 30000);
   if(startAnim){ startAnim.cancel(); startAnim = null; }
   const done = () => { startEl.classList.add('gone'); startAnim = null; };
@@ -3105,11 +3121,136 @@ function leaveWb(){ if(document.activeElement && document.activeElement.blur) do
 function openWbFromPush(back){
   if(startAnim){ startAnim.cancel(); startAnim = null; }
   startEl.classList.add('gone');
-  wbEl('wbCard').classList.add('gone');
+  wbEl('wbCard').classList.add('gone'); wbEl('wbCatch').classList.add('gone');
   if(!wbEl('wbPage').classList.contains('gone')){ wbEl('wbPage').classList.add('gone'); wbPageId = null; }
   if(wbEl('wb').classList.contains('gone')) enterWb(); else wbSync();
   wbFlipTo(!!back);
 }
+/* ---- 克克、Muse 写了什么：「你不在的时候」小纸条 + App 里的小弹窗 ---- */
+// 手机记着她「看到哪儿了」（mp_wb_seen，后端的时间戳）。比这新的、克克和 Muse 写的东西（页上的话、信、新添的事）就是她还没看到的：
+//   · 进工作台时：摊开一张小纸条「你不在的时候」，按页列出谁写了哪几句，点页名直接翻到那一页
+//   · 刚打开 App / 从后台切回来、人不在工作台：顶上滑下一张小弹窗（和 FromAlis 的一样），点一下去那一页 / 背面 / 小纸条
+//   · App 开着的时候他们写了新的：也弹一张；正好开着那一页（或正在看背面的信）就不弹
+// 她自己写的不算。App 开着、不在工作台时每分钟去后端看一眼
+const WB_SEEN_KEY = 'mp_wb_seen';
+const WB_CALL = { claude: '克克', muse: 'Muse' };
+function wbMaxTs(d){
+  let m = 0;
+  (d.letters || []).forEach(l => { m = Math.max(m, l.ts || 0); });
+  (d.tasks || []).forEach(t => { m = Math.max(m, t.createdAt || 0); (t.body || []).forEach(n => { m = Math.max(m, n.ts || 0); }); });
+  return m;
+}
+let wbSeen = Number(localStorage.getItem(WB_SEEN_KEY)) || wbMaxTs(wb); // 第一次：手机副本里已经有的都算看过，只提醒比它新的
+let wbToasted = wbSeen; // 弹窗已经提过的到哪儿了（不一定点开看过）
+function wbMarkSeen(ts){
+  wbSeen = Math.max(wbSeen, ts); wbToasted = Math.max(wbToasted, wbSeen);
+  try{ localStorage.setItem(WB_SEEN_KEY, String(wbSeen)); }catch(_){}
+}
+function wbFresh(since){
+  const ai = x => x && x.by && x.by !== 'jes' && (x.ts || 0) > since;
+  const pages = [], added = [];
+  const letters = (wb.letters || []).filter(ai);
+  (wb.tasks || []).forEach(t => {
+    if(t.createdBy && t.createdBy !== 'jes' && (t.createdAt || 0) > since) added.push(t);
+    const notes = (t.body || []).filter(ai);
+    if(notes.length) pages.push({ t, notes });
+  });
+  pages.sort((a, b) => b.notes[b.notes.length - 1].ts - a.notes[a.notes.length - 1].ts); // 最近写的那页排前面
+  const n = letters.length + added.length + pages.reduce((s, p) => s + p.notes.length, 0);
+  return { pages, added, letters, n };
+}
+const wbClip = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; };
+const wbInWb = () => !wbEl('wb').classList.contains('gone');
+function wbNotice(mode){
+  const top = wbMaxTs(wb);
+  if(!wbSeen){ wbMarkSeen(top); return; } // 手机上一点副本都没有（第一次用）：不拿以前的全部来刷屏
+  if(mode === 'enter'){
+    const f = wbFresh(wbSeen);
+    if(f.n) wbShowCatch(f); else wbMarkSeen(top);
+    return;
+  }
+  const f = wbFresh(mode === 'away' ? wbSeen : wbToasted);
+  wbToasted = Math.max(wbToasted, top);
+  if(!f.n) return;
+  // 她正看着写的地方：不用再告诉她
+  const onPage = wbInWb() && wbPageId && f.pages.length === 1 && f.pages[0].t.id === wbPageId && f.n === f.pages[0].notes.length;
+  const onBack = wbInWb() && !wbPageId && wbEl('wbSheet').classList.contains('flipped') && f.n === f.letters.length;
+  if(onPage || onBack) return wbMarkSeen(top);
+  wbToast(f, mode === 'away');
+}
+function wbToast(f, away){
+  const all = [].concat(...f.pages.map(p => p.notes), f.letters, f.added.map(t => ({ by: t.createdBy })));
+  const authors = [...new Set(all.map(x => x.by))];
+  const one = authors.length === 1 ? authors[0] : null;
+  let pv, go;
+  if(f.pages.length === 1 && f.n === f.pages[0].notes.length){
+    const p = f.pages[0], last = p.notes[p.notes.length - 1];
+    pv = '在「' + wbClip(p.t.title, 12) + '」上写：' + wbClip(last.text, 60);
+    go = () => wbGoto(p.t.id);
+  }else if(f.n === f.letters.length){
+    pv = (f.letters.length > 1 ? '写了 ' + f.letters.length + ' 封信：' : '写了一封信：') + wbClip(f.letters[f.letters.length - 1].text, 60);
+    go = () => wbGoto('back');
+  }else if(f.n === 1 && f.added.length === 1){
+    pv = '添了一件事：' + wbClip(f.added[0].title, 30);
+    go = () => wbGoto(f.added[0].id);
+  }else{
+    pv = authors.map(w => {
+      const k = f.pages.reduce((s, p) => s + p.notes.filter(x => x.by === w).length, 0);
+      const pg = f.pages.filter(p => p.notes.some(x => x.by === w)).length;
+      const bits = [];
+      if(k) bits.push((pg > 1 ? '在 ' + pg + ' 页上' : '') + '写了 ' + k + ' 句');
+      const l = f.letters.filter(x => x.by === w).length; if(l) bits.push(l + ' 封信');
+      const a = f.added.filter(x => x.createdBy === w).length; if(a) bits.push('添了 ' + a + ' 件事');
+      return (one ? '' : WB_CALL[w] + ' ') + bits.join('、');
+    }).join(' · ');
+    go = () => wbGoto('catch');
+  }
+  const ink = document.getElementById('toastInk');
+  ink.className = 'toast-ink' + (one ? ' ' + one : '');
+  ink.textContent = one ? (one === 'claude' ? 'C' : 'M') : '✎';
+  document.getElementById('toastName').textContent = away ? '你不在的时候' : (one ? WB_CALL[one] : '克克 & Muse');
+  document.getElementById('toastMore').textContent = away ? '工作台' : '工作台 · 现在';
+  document.getElementById('toastPv').textContent = (away && one ? WB_CALL[one] + ' ' : '') + pv;
+  toastCid = null; toastCount = 0; toastGo = go;
+  toastEl.classList.add('wbt');
+  toastEl.style.transform = '';
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, away ? 8000 : 5500); // 离开回来的那张多停一会儿
+}
+// 弹窗点了：摊开工作台，去那一页 / 翻到背面 / 摊开「你不在的时候」
+function wbGoto(where){
+  const f = wbFresh(wbSeen);
+  openWbFromPush(where === 'back');
+  if(where === 'catch') wbShowCatch(f);
+  else if(where !== 'back') wbOpenPage(where);
+  wbMarkSeen(wbMaxTs(wb));
+}
+function wbShowCatch(f){
+  const box = wbEl('wbCatchIn');
+  const who = b => '<span class="wb-who ' + b + '">' + (WB_NAME[b] || b) + '</span>';
+  const addedOnly = f.added.filter(t => !f.pages.some(p => p.t.id === t.id));
+  let h = '<div class="wb-head" style="margin-bottom:8px"><h1 style="font-size:20px">While you were away</h1><span class="sub">你不在的时候</span></div>';
+  f.pages.forEach(p => {
+    h += '<h3><button data-open="' + p.t.id + '">' + wbEsc(p.t.title) + '</button>' + (f.added.includes(p.t) ? ' <span class="wb-ts">新添的</span>' : '') + '</h3><ul>' +
+      p.notes.map(n => '<li>' + who(n.by) + '<span class="wb-ts">' + wbStamp(n.ts) + '</span><br><span class="d">' + wbEsc(wbClip(n.text, 160)) + '</span></li>').join('') + '</ul>';
+  });
+  if(addedOnly.length) h += '<h3>新添的事</h3><ul>' + addedOnly.map(t => '<li>' + who(t.createdBy) + ' <button class="t" data-open="' + t.id + '" style="font:inherit;font-weight:600;background:none;border:none;padding:0;color:inherit;text-align:left">' + wbEsc(t.title) + '</button></li>').join('') + '</ul>';
+  if(f.letters.length) h += '<h3><button data-back="1">背面的信 · ' + f.letters.length + ' 封</button></h3><ul>' +
+    f.letters.map(l => '<li>' + who(l.by) + '<span class="wb-ts">' + wbStamp(l.ts) + '</span><br><span class="d">' + wbEsc(wbClip(l.text, 80)) + '</span></li>').join('') + '</ul>';
+  box.innerHTML = h;
+  box.scrollTop = 0;
+  const close = () => wbEl('wbCatch').classList.add('gone');
+  box.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { close(); wbOpenPage(b.dataset.open); }));
+  box.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => { close(); if(wbPageId) wbClosePage(); wbFlipTo(true); }));
+  wbEl('wbCatch').classList.remove('gone');
+  wbMarkSeen(wbMaxTs(wb));
+}
+wbEl('wbCatchClose').addEventListener('click', () => wbEl('wbCatch').classList.add('gone'));
+wbEl('wbCatch').addEventListener('click', e => { if(e.target === wbEl('wbCatch')) wbEl('wbCatch').classList.add('gone'); });
+// App 开着、不在工作台：每分钟看一眼他们有没有写新的（在工作台里本来就 30 秒同步一次）
+setInterval(() => { if(document.visibilityState === 'visible' && !wbInWb()) wbSync(); }, 60000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') wbSync('away'); });
+
 if(window.__openFromPush === 'wb' || window.__openFromPush === 'wb-back') openWbFromPush(window.__openFromPush === 'wb-back');
 
 /* ---------- 初始化 ---------- */
@@ -3141,6 +3282,7 @@ async function init(){
   loadMemories();
 }
 init();
+if(!wbInWb()) wbSync('away'); // 刚打开 App：克克、Muse 在她不在的时候写了什么（点推送直接进工作台的，进去时会摊开小纸条）
 </script>
 </body>
 </html>
