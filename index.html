@@ -525,6 +525,9 @@
   /* 空一行分段：只留小半行的空隙，不再空出整整一行 */
   .wb-p{ display:block; margin-top:.45em; }
   .wb-letter .sig{ text-align:right; margin-top:2px; white-space:normal; }
+  /* 一句话摘要（克克、Muse 写长内容时附的 brief）：正文上方一行小字，用写的人的墨水色，淡一点 */
+  .wb-brief{ display:block; font-family: var(--name-font); font-style:italic; font-size:10.5px; line-height:1.4; margin-bottom:1px; opacity:.75; white-space:normal; }
+  .wb-brief.claude{ color: var(--c-claude); } .wb-brief.muse{ color: var(--c-muse); } .wb-brief.jes{ color: var(--c-jes); }
   /* 写字的那一行（信、草稿共用） */
   .wb-pen{ position:absolute; left:50px; right:18px; bottom:12px; z-index:3; display:flex; align-items:flex-end; gap:8px;
     border-bottom:1px solid var(--ink-faint); padding:4px 0; }
@@ -2838,7 +2841,7 @@ function wbRender(){
   // 背面：信
   back.innerHTML = '<div class="wb-head"><h1>Letters</h1><span class="sub">往来</span></div>' +
     (wb.letters.length ? '' : '<div class="wb-empty">还没有人写信。</div>') +
-    wb.letters.map(l => '<div class="wb-letter">' + wbParas(l.text) + '<div class="sig"><span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
+    wb.letters.map(l => '<div class="wb-letter">' + wbBrief(l) + wbParas(l.text) + '<div class="sig"><span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
   if(wbEl('wbCard') && !wbEl('wbCard').classList.contains('gone')) wbRenderCard();
 }
 function wbStamp(ts){ const d = new Date(ts); return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
@@ -2945,7 +2948,7 @@ function wbRenderPage(){
   const notes = wbEl('wbNotes');
   t.body.forEach(n => {
     const p = document.createElement('div'); p.className = 'wbp-note';
-    p.innerHTML = '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>';
+    p.innerHTML = wbBrief(n) + '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>';
     p.addEventListener('click', () => wbEditNote(t, n, p));
     notes.appendChild(p);
   });
@@ -2976,6 +2979,7 @@ function wbEditNote(t, n, p){
 /* ---- 写字：草稿、信 ---- */
 function wbFit(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 // 信和页上的话：空一行（或好几行）分段的地方，只留小半行的空隙，不再空出整整一行；原文不动
+function wbBrief(x){ return x.brief ? '<span class="wb-brief ' + x.by + '">' + wbEsc(x.brief) + '</span>' : ''; }
 function wbParas(text){
   const parts = String(text || '').replace(/\s+$/, '').split(/\n[ \t\u3000]*(?:\n[ \t\u3000]*)+/);
   return wbEsc(parts[0]) + parts.slice(1).map(p => '<span class="wb-p">' + wbEsc(p) + '</span>').join('');
