@@ -524,6 +524,23 @@
   .wb-letter{ margin-bottom:16px; font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; }
   /* 空一行分段：只留小半行的空隙，不再空出整整一行 */
   .wb-p{ display:block; margin-top:.45em; }
+  .wb-p.tight{ margin-top:0; }
+  /* 纸上的笔法：小标题、清单、日期、等 Jes 拍板的波浪线（只在长内容里出现，平时就是普通的字） */
+  .wb-h{ display:block; width:max-content; max-width:100%; font-size:1.12em; font-weight:700; letter-spacing:.04em; margin:.8em 0 .2em; padding:0 2.5em 1px 0;
+    background: linear-gradient(90deg, var(--ink-soft), transparent) left bottom / 100% 1px no-repeat; }
+  .wb-li{ display:flex; margin:1px 0; }
+  .wb-h.gap, .wb-li.gap{ margin-top:.45em; }
+  .wb-h:first-child{ margin-top:.2em; }
+  .wb-m{ display:inline-block; margin:0 .2em; font-family: var(--name-font); }
+  .wb-li > .wb-m{ flex:none; width:1.35em; margin:0; text-align:center; }
+  .wb-m.ok{ color: var(--ink-soft); }
+  .wb-m.maybe{ color: var(--ink-faint); font-family:"Noto Serif SC", serif; font-size:.92em; }
+  .wb-li > .wb-m.num, .wb-li > .wb-m.dot{ color: var(--ink-soft); width:1.6em; text-align:left; }
+  .wb-box{ display:inline-block; width:.72em; height:.72em; border:1.3px solid var(--red); border-radius:2px; vertical-align:-.05em; transform:rotate(-3deg); }
+  .wb-lb{ flex:1; min-width:0; }
+  .wb-d{ display:inline-block; min-width:2.9em; margin-right:.4em; color: var(--red); font-family: var(--name-font); font-size:1.04em; font-variant-numeric: tabular-nums; }
+  .wb-ask{ text-decoration: underline wavy rgba(154,58,44,.7); text-decoration-thickness:1px; text-underline-offset:3px; -webkit-text-decoration: underline wavy rgba(154,58,44,.7); }
+  .wb-t{ font-weight:700; }
   .wb-letter .sig{ text-align:right; margin-top:2px; white-space:normal; }
   /* 一句话摘要（克克、Muse 写长内容时附的 brief）：正文上方一行小字，用写的人的墨水色，淡一点 */
   .wb-brief{ display:block; font-family: var(--name-font); font-style:italic; font-size:10.5px; line-height:1.4; margin-bottom:1px; opacity:.75; white-space:normal; }
@@ -2980,9 +2997,53 @@ function wbEditNote(t, n, p){
 function wbFit(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 // 信和页上的话：空一行（或好几行）分段的地方，只留小半行的空隙，不再空出整整一行；原文不动
 function wbBrief(x){ return x.brief ? '<span class="wb-brief ' + x.by + '">' + wbEsc(x.brief) + '</span>' : ''; }
+/* 信和页上的话怎么画在纸上。原文一个字都不动，只认几种笔法：
+   单独一行的【小标题】→ 加粗、下面划一道线；✅ 🔶 ⬜ 「- 」「1.」开头的清单 → 笔画的 ✓ ? □，换行和第一行的字对齐，
+   开头的日期变红墨水；⬜ 那行和 ==这样== 包起来的 → 红色波浪线（等 Jes 拍板）；**这样** → 加粗。
+   长内容（6 行以上、里面有小标题或清单）的第一行自动加粗当标题，只加粗不放大。空行只留小半行的空隙。 */
+const WB_MARK = { '✅': ['ok', '✓'], '☑️': ['ok', '✓'], '✔️': ['ok', '✓'], '🔶': ['maybe', '?'], '⬜': ['ask', '<i class="wb-box"></i>'], '☐': ['ask', '<i class="wb-box"></i>'] };
+const WB_LI_RE = /^(✅|☑️|✔️|🔶|⬜|☐|[-•・](?=[ \t\u3000])|\d{1,2}[.、)）](?=\D))[ \t\u3000]*(.*)$/;
+const WB_DATE_RE = /^(\d{1,2}:\d{2}(?:[–~～-]\d{1,2}:\d{2})?|(?:\d{4}\/)?\d{1,2}\/\d{1,2}(?:[–~～-]\d{1,2}(?:\/\d{1,2})?)?|\d{1,2}(?:[–~～-]\d{1,2})?\s?月(?:上旬|中旬|下旬|前后|中|初|底)?(?:[–~～-]\d{1,2}\s?月(?:初|底|中)?)?)[ \t\u3000]*/;
+function wbInline(s){
+  return wbEsc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/==(.+?)==/g, '<span class="wb-ask">$1</span>')
+    .replace(/✅|☑️|✔️/g, '<span class="wb-m ok">✓</span>').replace(/🔶/g, '<span class="wb-m maybe">?</span>').replace(/⬜|☐/g, '<span class="wb-m ask"><i class="wb-box"></i></span>');
+}
 function wbParas(text){
-  const parts = String(text || '').replace(/\s+$/, '').split(/\n[ \t\u3000]*(?:\n[ \t\u3000]*)+/);
-  return wbEsc(parts[0]) + parts.slice(1).map(p => '<span class="wb-p">' + wbEsc(p) + '</span>').join('');
+  const lines = String(text || '').replace(/\s+$/, '').split('\n');
+  const items = []; let gap = false;          // 每一项：{ kind: 'text' | 'head' | 'li', ... , gap: 前面有没有空行 }
+  for(const raw of lines){
+    const ln = raw.replace(/[ \t\u3000]+$/, '');
+    if(!ln.trim()){ gap = items.length > 0; continue; }
+    let m;
+    if((m = ln.match(/^[ \t\u3000]*【([^】]{1,20})】$/))) items.push({ kind: 'head', t: m[1], gap });
+    else if((m = ln.match(WB_LI_RE)) && !/^=/.test(m[2])){       // 「✅ = 已核实」这种图例不算清单
+      const k = m[1], mk = WB_MARK[k] || (/\d/.test(k) ? ['num', wbEsc(k)] : ['dot', '–']);
+      let rest = m[2], d = '';
+      const dm = rest.match(WB_DATE_RE);
+      if(dm && dm[0].length < rest.length){ d = dm[1]; rest = rest.slice(dm[0].length); }
+      items.push({ kind: 'li', mk, d, t: rest, gap });
+    } else if(items.length && items[items.length - 1].kind === 'text' && !gap) items[items.length - 1].lines.push(ln);
+    else items.push({ kind: 'text', lines: [ln], gap });
+    gap = false;
+  }
+  const shaped = items.filter(x => x.kind !== 'text').length;
+  const lineCount = lines.filter(l => l.trim()).length;
+  const titled = items[0] && items[0].kind === 'text' && lineCount >= 6 && shaped >= 2 && items[0].lines[0].length <= 40;
+  return items.map((x, i) => {
+    const g = x.gap ? ' gap' : '';
+    if(x.kind === 'head') return '<span class="wb-h' + g + '">' + wbInline(x.t) + '</span>';
+    if(x.kind === 'li'){
+      let body = (x.d ? '<span class="wb-d">' + wbEsc(x.d) + '</span>' : '') + wbInline(x.t);
+      if(x.mk[0] === 'ask') body = '<span class="wb-ask">' + body + '</span>';
+      return '<span class="wb-li' + g + '"><span class="wb-m ' + x.mk[0] + '">' + x.mk[1] + '</span><span class="wb-lb">' + body + '</span></span>';
+    }
+    const ls = x.lines.map(wbInline);
+    if(i === 0 && titled) ls[0] = '<b class="wb-t">' + ls[0] + '</b>';
+    const t = ls.join('\n');
+    return i === 0 ? t : '<span class="wb-p' + (x.gap ? '' : ' tight') + '">' + t + '</span>';   // 第一段接在署名后面，不另起一行
+  }).join('');
 }
 function wbGrow(ta){ ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
 wbEl('wbLetterIn').addEventListener('input', e => wbGrow(e.target));
