@@ -237,6 +237,15 @@
   .vbars i.on{ background: var(--lamp); opacity:1; }
   .bubble.voice.playing .vbars i:not(.on){ animation: vbreath 1.4s ease-in-out infinite; }
   @keyframes vbreath{ 50%{ opacity:.9; } }
+  .vfav{ display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.07); }
+  .vfav:last-child{ border-bottom:none; }
+  .vfav .bubble{ background: var(--bubble-ai); color: var(--ink); border: 1px solid var(--glass-edge); border-top-left-radius:4px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .vfav .vzh{ font-size:12.5px; color: var(--ink); line-height:1.55; }
+  .vfav .vmeta{ font-size:11px; color: var(--ink-dim); }
+  .vfav .vacts{ display:flex; gap:8px; flex-wrap:wrap; }
+  .vfav .vacts button{ font: inherit; font-size:11.5px; color: var(--ink-dim); background:transparent; border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:3px 11px; cursor:pointer; }
+  .vfav .vacts button.on{ color: var(--lamp); border-color: var(--lamp); }
+  .vfav-empty{ font-size:12.5px; color: var(--ink-dim); line-height:1.6; }
   .vdur{ font-size:12px; color: var(--ink-dim); font-variant-numeric: tabular-nums; flex:none; }
   .bubble.voice.broken .vdur{ color:#D8A39A; }
   .vtoggle{ font-size:11px; color: var(--lamp-dim); padding:0 4px; cursor:pointer; letter-spacing:.3px; }
@@ -885,6 +894,10 @@
             <button class="settings-save" id="enableNotifyBtn">开启通知</button>
           </div>
           <div class="settings-section">
+            <h4>收藏的语音</h4>
+            <div id="voiceFavList"></div>
+          </div>
+          <div class="settings-section">
             <h4>Ta 记住的事</h4>
             <div id="memoryList"></div>
           </div>
@@ -1101,7 +1114,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     }
     screenEl.style.setProperty('--push-ms', '300ms'); // 背景的模糊程度跟着一起变
     updateBg();
-    if(btn.dataset.tab === 'settings') loadMemories();
+    if(btn.dataset.tab === 'settings'){ loadMemories(); loadVoiceFavs(); }
     if(btn.dataset.tab === 'moments'){
       if(wasActive){ document.getElementById('momentsBody').scrollTo({ top: 0, behavior: 'smooth' }); syncFeed(); } // 再点一次「动态」：平滑回到最上面
       else { renderFeed(); updateFeedDot(); syncFeed(); }
@@ -1502,6 +1515,7 @@ function toggleVoice(b, v){
   if(voiceNow && voiceNow.b === b){ stopVoice(); return; }
   stopVoice();
   const audio = new Audio(voiceUrl(v.id));
+  audio.loop = b.classList.contains('looping'); // 收藏夹里开了「循环」的，一遍遍放
   voiceNow = { b, audio };
   b.classList.add('playing'); b.classList.remove('broken');
   const mine = () => voiceNow && voiceNow.audio === audio;
@@ -1705,6 +1719,7 @@ function openMsgMenu(b){
   addItem('引用', () => startReply(m));
   const copyText = m.voice ? m.voice.en : m.text; // 语音复制的是英文原话
   if(copyText) addItem('复制', () => { if(navigator.clipboard) navigator.clipboard.writeText(copyText).catch(() => {}); });
+  if(m.voice && m.voice.id) addItem(isVoiceFav(m) ? '取消收藏' : '收藏', () => toggleVoiceFav(m));
   document.body.appendChild(menuEl);
   // 菜单放在气泡上方，上面放不下就放下方
   const r = b.getBoundingClientRect(), mw = menuEl.offsetWidth, mh = menuEl.offsetHeight;
@@ -2492,6 +2507,108 @@ function renderMemoryList(){
     });
     row.appendChild(span); row.appendChild(delBtn);
     memoryListEl.appendChild(row);
+  });
+}
+
+/* ---------- 收藏的语音（正本在后端 /voice-favs，手机里 mp_voice_favs 是副本） ---------- */
+let voiceFavs = (() => { try{ return JSON.parse(localStorage.getItem('mp_voice_favs') || '[]'); }catch(_){ return []; } })();
+const saveVoiceFavs = () => { try{ localStorage.setItem('mp_voice_favs', JSON.stringify(voiceFavs)); }catch(_){} };
+const isVoiceFav = (m) => voiceFavs.some(f => f.msgId === m.id || (m.voice && f.id === m.voice.id));
+async function toggleVoiceFav(m){
+  if(!backendUrl) return;
+  const was = isVoiceFav(m);
+  try{
+    const data = await api('/voice-favs', { method: 'POST', body: { conv: currentConv, id: m.id } });
+    voiceFavs = data.favs || []; saveVoiceFavs(); renderVoiceFavs();
+    if(navigator.vibrate) navigator.vibrate(10);
+    addNote(was ? '已从收藏里拿掉' : '收藏好了，在「设置 · 收藏的语音」里');
+  }catch(e){ addNote('没收藏上：' + e.message); }
+}
+async function loadVoiceFavs(){
+  renderVoiceFavs();
+  if(!backendUrl) return;
+  try{ const data = await api('/voice-favs'); voiceFavs = data.favs || []; saveVoiceFavs(); renderVoiceFavs(); }
+  catch(e){ /* 拿不到就先显示手机里的副本 */ }
+}
+// 存到手机：iPhone 上弹出分享面板（选「存储到文件」），别的地方直接下载
+async function saveVoiceFile(f, btn){
+  const old = btn.textContent;
+  btn.textContent = '准备中…';
+  try{
+    const res = await fetch(voiceUrl(f.id));
+    if(!res.ok) throw new Error('状态码 ' + res.status);
+    const blob = await res.blob();
+    const d = new Date(f.sentAt || f.favAt || Date.now());
+    const name = 'Alis-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + f.id.slice(-4) + '.mp3';
+    const file = new File([blob], name, { type: 'audio/mpeg' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file] });
+    }else{
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    btn.textContent = old;
+  }catch(e){
+    btn.textContent = e.name === 'AbortError' ? old : '没存上';
+    if(e.name !== 'AbortError') setTimeout(() => { btn.textContent = old; }, 2000);
+  }
+}
+function renderVoiceFavs(){
+  const box = document.getElementById('voiceFavList');
+  if(!box) return;
+  if(voiceNow && box.contains(voiceNow.b)) return; // 正在放收藏夹里的某条，别把它重画掉
+  box.innerHTML = '';
+  if(!voiceFavs.length){
+    box.innerHTML = '<div class="vfav-empty">还没有收藏。在聊天里长按他的语音条，点「收藏」。</div>';
+    return;
+  }
+  voiceFavs.forEach(f => {
+    const item = document.createElement('div');
+    item.className = 'vfav';
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    fillVoice(b, f);
+    const zh = document.createElement('div');
+    zh.className = 'vzh'; zh.textContent = f.zh || '';
+    const meta = document.createElement('div');
+    meta.className = 'vmeta';
+    const who = (CONTACT_INFO[f.speaker] && CONTACT_INFO[f.speaker].name) || 'Alistair';
+    meta.textContent = who + ' · ' + new Date(f.sentAt || f.favAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const acts = document.createElement('div');
+    acts.className = 'vacts';
+    const loop = document.createElement('button');
+    loop.textContent = '循环';
+    loop.addEventListener('click', () => {
+      const on = b.classList.toggle('looping');
+      loop.classList.toggle('on', on);
+      if(voiceNow && voiceNow.b === b) voiceNow.audio.loop = on;
+      else if(on) toggleVoice(b, f); // 开循环就顺手放起来
+    });
+    const tr = document.createElement('button');
+    tr.textContent = '英文原话';
+    let trBox = null;
+    tr.addEventListener('click', () => {
+      if(trBox){ trBox.remove(); trBox = null; tr.classList.remove('on'); zh.style.display = ''; return; }
+      trBox = voiceTranscript(f); zh.after(trBox); zh.style.display = 'none'; tr.classList.add('on'); // 转文字里已经带中文了
+    });
+    const dl = document.createElement('button');
+    dl.textContent = '存到手机';
+    dl.addEventListener('click', () => saveVoiceFile(f, dl));
+    const rm = document.createElement('button');
+    rm.textContent = '取消收藏';
+    rm.addEventListener('click', async () => {
+      if(!confirm('从收藏里拿掉这条语音？（聊天里的那条不受影响）')) return;
+      try{
+        const data = await api('/voice-favs', { method: 'POST', body: { id: f.msgId } });
+        if(voiceNow && voiceNow.b === b) stopVoice();
+        voiceFavs = data.favs || []; saveVoiceFavs(); renderVoiceFavs();
+      }catch(e){ alert('没拿掉：' + e.message); }
+    });
+    acts.append(loop, tr, dl, rm);
+    item.append(b, zh, meta, acts);
+    box.appendChild(item);
   });
 }
 
