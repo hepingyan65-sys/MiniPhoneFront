@@ -9,6 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500&family=IM+Fell+English:ital@0;1&family=Noto+Serif+SC:wght@500&display=swap" rel="stylesheet">
+<!-- 克克红圈旁的批注用「演示秋鸿楷」（一位高中老师手写的楷书），Google Fonts 上没有，从 jsDelivr 载入；按需分片，只下用到的字 -->
+<link href="https://cdn.jsdelivr.net/npm/cn-fontsource-slideqiuhong-regular@1.0.6/font.css" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>小手机</title>
@@ -513,6 +515,16 @@
   @keyframes wbInk{ from{ color: var(--graphite); font-weight:400; } 40%{ font-weight:600; } to{ color: var(--ink); } }
   .wb-task.inked .title, .wbp-title.inked{ animation: wbInk 1.2s ease-out; }
   @media (prefers-reduced-motion: reduce){ .wb-task.inked .title, .wbp-title.inked{ animation:none; } }
+  /* 红笔圈：克克圈出今天最不能掉的那件，一圈手画的红墨水（首尾交叠、没封严），右边空白处用红笔写为什么。只管当天 */
+  .wb-task.circled .title{ position:relative; display:inline-block; max-width:58%; } /* 右边留给克克的批注 */
+  .wb-task.circled .title::after{ content:""; position:absolute; left:-9px; right:-11px; top:-6px; bottom:-5px; pointer-events:none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 60' preserveAspectRatio='none'%3E%3Cpath d='M168 9C140 1 52 1 20 11 4 17 2 37 16 47c26 13 130 13 166 1 17-6 17-30 0-38-14-6-40-8-62-7' fill='none' stroke='%239A3A2C' stroke-width='1.7' stroke-linecap='round' vector-effect='non-scaling-stroke' opacity='.85'/%3E%3C/svg%3E") no-repeat;
+    background-size:100% 100%; transform: rotate(-1.2deg); }
+  /* 批注：演示秋鸿楷（手写楷书），写在这一行右边的空白处，往左歪一点，像顺手批上去的 */
+  .wb-circle-note{ font-family:"Slideqiuhong", var(--name-font), cursive; font-size:16px; line-height:1.25; color: var(--red); letter-spacing:.02em; }
+  .wb-task > .wb-circle-note{ position:absolute; right:2px; top:-3px; width:38%; text-align:center; transform: rotate(-5deg); transform-origin: center; opacity:.92; pointer-events:none; }
+  .wbp-prop .wb-circle-note{ font-size:14px; } /* 那一页里小一号，免得把「擦掉」挤到下一行 */
+  .wb-circle-note .by{ font-family: var(--name-font); font-style:italic; font-size:10px; opacity:.7; margin-left:4px; }
   .wb-task.leaving .title{ text-decoration: line-through; color: var(--ink-faint); }
   .wb-task.leaving{ transition: opacity .5s .35s; opacity:0; }
   /* 打勾的小方框：点的范围比框大一圈 */
@@ -2690,6 +2702,7 @@ let wbPageId = null;     // 正在看哪一页（'new' = 正在写一件新的�
 let wbNewParent = '';    // 新写的这件事挂在哪个长线下面
 let wbJustInked = '';    // 刚"描成墨水"的那件事：画出来时播一下字从灰晕成墨的动画
 function wbInkClass(t){ return t.pencil ? ' pencil' : (t.id && t.id === wbJustInked ? ' inked' : ''); }
+function wbCircled(t){ return !!(t && t.circle && t.circle.day === wbJpToday()); } // 红笔圈只管当天：过了日本零点就当没圈
 let wbPoll = null;
 const wbSaveLocal = () => { try{ localStorage.setItem('mp_wb', JSON.stringify(wb)); }catch(_){} };
 const wbEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2799,12 +2812,13 @@ wbEl('wbDaysBtn').addEventListener('click', () => {
 /* ---- 正面：手头的事 ---- */
 function wbTaskRow(t, opts = {}){
   const div = document.createElement('div');
-  div.className = 'wb-task' + (t.status === 'hold' ? ' hold' : '') + wbInkClass(t);
+  div.className = 'wb-task' + (t.status === 'hold' ? ' hold' : '') + wbInkClass(t) + (wbCircled(t) && t.status !== 'done' ? ' circled' : '');
   const p = t.parent && wb.tasks.find(x => x.id === t.parent);
   div.innerHTML = (opts.noDate ? '' : '<span class="date">' + wbDay(t.start) + '</span>') +
     '<div class="row">' + (t.status === 'hold' ? '' : '<button class="wb-box' + (t.status === 'done' ? ' on' : '') + '" aria-label="做完了"><i></i></button>') +
     '<button class="main"><div class="title">' + wbEsc(t.title) + (p && !opts.noGroup ? '<span class="grp">· ' + wbEsc(p.title) + '</span>' : '') + '</div>' +
-    (wbMeta(t) ? '<div class="meta">' + wbMeta(t) + '</div>' : '') + '</button></div>';
+    (wbMeta(t) ? '<div class="meta">' + wbMeta(t) + '</div>' : '') + '</button></div>' +
+    (div.classList.contains('circled') && t.circle.note ? '<div class="wb-circle-note">' + wbEsc(t.circle.note).replace(/([，,；;])\s*/, '$1<br>') + '</div>' : ''); // 有逗号就在第一个逗号后换行，免得把一个词拆开
   div.querySelector('.main').addEventListener('click', () => wbOpenPage(t.id));
   const box = div.querySelector('.wb-box');
   if(box) box.addEventListener('click', () => wbToggleDone(t, div, box));
@@ -2922,6 +2936,9 @@ function wbRenderPage(){
       '<div class="wbp-prop"><span class="k">笔</span><span class="v">' +
         '<button class="wbp-ink' + (t.pencil ? ' on' : '') + '" data-pencil="1">铅笔 · 还没想好</button>' +
         '<button class="wbp-ink' + (t.pencil ? '' : ' on') + '" data-pencil="">墨水 · 定了</button></span></div>' +
+      (isNew ? '' : '<div class="wbp-prop"><span class="k">红圈</span><span class="v">' + (wbCircled(t)
+        ? '<span class="wb-circle-note" style="margin:0">' + (t.circle.note ? wbEsc(t.circle.note) : '今天圈着') + '<span class="by">' + (WB_NAME[t.circle.by] || '') + '</span></span><button class="wbp-opt" id="wbCircleBtn" data-on="">擦掉</button>'
+        : '<button class="wbp-opt" id="wbCircleBtn" data-on="1">今天圈起来</button>') + '</span></div>') +
       when('start', '开始') + when('end', '结束') +
       text('category', '类别', '学习、搬家、社团……') +
       '<div class="wbp-prop"><span class="k">优先级</span><span class="v">' + opt('priority', 'high', '高', true) + opt('priority', 'mid', '中') + opt('priority', 'low', '低') + opt('priority', '', '不分') + '</span></div>' +
@@ -2960,6 +2977,8 @@ function wbRenderPage(){
     if(!pencil && t.id){ wbJustInked = t.id; setTimeout(() => { if(wbJustInked === t.id) wbJustInked = ''; }, 1500); }
     save({ pencil });
   }));
+  const cb = wbEl('wbCircleBtn'); // 红圈：Jes 自己圈（不写字）或擦掉
+  if(cb) cb.addEventListener('click', () => save({ circle: !!cb.dataset.on }));
   box.querySelectorAll('.wbp-in').forEach(inp => {
     inp.addEventListener('change', () => { if(need()) wbSaveTask(wbPageId, { [inp.dataset.f]: inp.value }).catch(e => { wbFlash(e.message); wbRenderPage(); }); });
     inp.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); inp.blur(); } });
