@@ -539,6 +539,16 @@
   @keyframes wbSealIn{ from{ transform: rotate(var(--r)) scale(1.9); opacity:0; } 60%{ opacity:.95; } to{ transform: rotate(var(--r)) scale(1); opacity:.86; } }
   @media (prefers-reduced-motion: reduce){ .wb-seal.fresh{ animation:none; } }
   .wbp-seals{ margin:-4px 34px 8px 0; justify-content:flex-start; }
+  /* 小星星：克克、Muse 用自己的墨水笔给 Jes 手描的一颗星（轮廓 + 淡淡涂一层），有点歪；新贴的轻轻"跳"一下 */
+  .wb-stars{ display:inline-flex; gap:2px; vertical-align:-2px; margin-left:6px; pointer-events:none; }
+  .wb-star{ width:18px; height:18px; color: var(--red); transform: rotate(var(--r, -8deg)); }
+  .wb-star path{ fill: currentColor; fill-opacity:.2; stroke: currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+  .wb-star.claude{ color: var(--c-claude); } .wb-star.muse{ color: var(--c-muse); }
+  .wb-stars.mini .wb-star{ width:13px; height:13px; }
+  .wb-stars.block{ display:flex; margin:-2px 0 8px; }
+  .wb-star.fresh{ animation: wbStarIn .5s cubic-bezier(.3,1.6,.5,1) both; }
+  @keyframes wbStarIn{ from{ transform: rotate(calc(var(--r) - 40deg)) scale(.2); opacity:0; } to{ transform: rotate(var(--r)) scale(1); opacity:1; } }
+  @media (prefers-reduced-motion: reduce){ .wb-star.fresh{ animation:none; } }
   /* 长按一段、一封信：弹出 Jes 的章 */
   .wbp-note, .wb-letter{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   .wb-stampmenu{ --c-claude:#8A4B2A; --c-muse:#2F5560; --c-jes:#5B3F68; --red:#9A3A2C; --paper:#E9DDBF; --ink-soft:#5E4E3A; /* 挂在工作台外面，自己带上纸和墨水的颜色 */
@@ -2775,6 +2785,26 @@ function wbStampMenu(x, y, target, item, onDone){
     }catch(err){ wbFlash(err.message); }
   });
 }
+// 小星星：手描的星星轮廓（起笔和收笔没完全对上，像手画的），里面用同色墨水淡淡涂一层
+const WB_STAR_PATH = 'M12 2.3 L14.6 8.6 L21.4 9.1 L16.2 13.4 L18.1 20.2 L12.1 16.4 L6 20 L8 13.2 L2.7 8.8 L9.4 8.4 L12.5 2.9';
+let wbFreshStars = new Set(); // 这次同步新出现的星星（by + 东西的 id）：画出来时"跳"一下
+let wbSeenStars = null;       // 上一次看到的星星，用来找出新贴的
+function wbStars(x, cls){
+  if(!x || !x.stars || !x.stars.length) return '';
+  return '<span class="wb-stars' + (cls ? ' ' + cls : '') + '">' + x.stars.map(s => {
+    const r = (wbHash(s.by + (x.id || '') + 'star') % 31) - 15;
+    return '<svg class="wb-star ' + s.by + (wbFreshStars.has(s.by + x.id) ? ' fresh' : '') + '" viewBox="0 0 24 24" style="--r:' + r + 'deg" aria-label="' + (WB_NAME[s.by] || '') + ' 贴的小星星"><path d="' + WB_STAR_PATH + '"/></svg>';
+  }).join('') + '</span>';
+}
+// 每次拿到新的纸，比一比哪些星星是新贴的（第一次打开时不算新的）
+function wbNoteStars(){
+  const now = new Set();
+  const add = x => (x.stars || []).forEach(s => now.add(s.by + x.id));
+  wb.tasks.forEach(t => { add(t); (t.body || []).forEach(add); }); (wb.letters || []).forEach(add);
+  wbFreshStars = wbSeenStars ? new Set([...now].filter(k => !wbSeenStars.has(k))) : new Set();
+  wbSeenStars = now;
+  if(wbFreshStars.size) setTimeout(() => { wbFreshStars = new Set(); }, 1500);
+}
 function wbCircled(t){ return !!(t && t.circle && t.circle.day === wbJpToday()); } // 红笔圈只管当天：过了日本零点就当没圈
 let wbPoll = null;
 const wbSaveLocal = () => { try{ localStorage.setItem('mp_wb', JSON.stringify(wb)); }catch(_){} };
@@ -2807,7 +2837,8 @@ function wbFlash(msg){ const el = wbEl('wbSync'); el.textContent = msg; clearTim
 async function wbSync(mode){
   if(wbLocked) return wbRender();
   try{
-    wb = await wbApi('/wb'); wbSaveLocal();
+    if(!wbSeenStars) wbNoteStars(); // 先记下手机副本里已有的星星：不在的时候新贴的，进来时会"跳"一下
+    wb = await wbApi('/wb'); wbSaveLocal(); wbNoteStars();
     wbRender();
     if(wbPageId && wbPageId !== 'new' && !wbPageBusy()) wbRenderPage();
   }catch(e){ if(!wbLocked) wbFlash('没连上'); return; }
@@ -2889,7 +2920,7 @@ function wbTaskRow(t, opts = {}){
   const p = t.parent && wb.tasks.find(x => x.id === t.parent);
   div.innerHTML = (opts.noDate ? '' : '<span class="date">' + wbDay(t.start) + '</span>') +
     '<div class="row">' + (t.status === 'hold' ? '' : '<button class="wb-box' + (t.status === 'done' ? ' on' : '') + '" aria-label="做完了"><i></i></button>') +
-    '<button class="main"><div class="title">' + wbEsc(t.title) + (p && !opts.noGroup ? '<span class="grp">· ' + wbEsc(p.title) + '</span>' : '') + '</div>' +
+    '<button class="main"><div class="title">' + wbEsc(t.title) + wbStars(t, 'mini') + (p && !opts.noGroup ? '<span class="grp">· ' + wbEsc(p.title) + '</span>' : '') + '</div>' +
     (wbMeta(t) ? '<div class="meta">' + wbMeta(t) + '</div>' : '') + '</button></div>' +
     (div.classList.contains('circled') && t.circle.note ? '<div class="wb-circle-note">' + wbEsc(t.circle.note).replace(/([，,；;])\s*/, '$1<br>') + '</div>' : ''); // 有逗号就在第一个逗号后换行，免得把一个词拆开
   div.querySelector('.main').addEventListener('click', () => wbOpenPage(t.id));
@@ -2960,7 +2991,7 @@ function wbRender(){
   // 背面：信
   back.innerHTML = '<div class="wb-head"><h1>Letters</h1><span class="sub">往来</span></div>' +
     (wb.letters.length ? '' : '<div class="wb-empty">还没有人写信。</div>') +
-    wb.letters.map(l => '<div class="wb-letter" data-id="' + l.id + '">' + wbBrief(l) + wbParas(l.text) + '<div class="sig">' + wbSeals(l, 'inline') + '<span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
+    wb.letters.map(l => '<div class="wb-letter" data-id="' + l.id + '">' + wbBrief(l) + wbParas(l.text) + '<div class="sig">' + wbSeals(l, 'inline') + wbStars(l) + ' <span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
   back.querySelectorAll('.wb-letter').forEach(el => { const l = wb.letters.find(x => x.id === el.dataset.id);
     if(l) wbLongPress(el, (x, y) => wbStampMenu(x, y, { on: 'letter', letter_id: l.id }, l, wbRender)); });
   if(wbEl('wbCard') && !wbEl('wbCard').classList.contains('gone')) wbRenderCard();
@@ -3006,7 +3037,7 @@ function wbRenderPage(){
     '<textarea class="wbp-in" rows="1" data-f="' + field + '" placeholder="' + ph + '">' + wbEsc(t[field]) + '</textarea></span></div>';
   box.innerHTML =
     '<textarea class="wbp-title' + wbInkClass(t) + '" id="wbTitleIn" rows="1" placeholder="这件事叫什么">' + wbEsc(t.title) + '</textarea>' +
-    (isNew ? '' : wbSeals(t, 'wbp-seals')) +
+    (isNew ? '' : wbSeals(t, 'wbp-seals') + wbStars(t, 'block')) +
     '<div class="wbp-props">' +
       '<div class="wbp-prop"><span class="k">状态</span><span class="v">' + opt('status', 'todo', '要做') + opt('status', 'hold', '搁置') + opt('status', 'done', '做完了') + '</span></div>' +
       '<div class="wbp-prop"><span class="k">笔</span><span class="v">' +
@@ -3085,7 +3116,7 @@ function wbRenderPage(){
   const notes = wbEl('wbNotes');
   t.body.forEach(n => {
     const p = document.createElement('div'); p.className = 'wbp-note';
-    p.innerHTML = wbBrief(n) + '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>' + wbSeals(n);
+    p.innerHTML = wbBrief(n) + '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>' + wbStars(n) + wbSeals(n);
     p.addEventListener('click', () => { if(!wbJustLong(p)) wbEditNote(t, n, p); });
     wbLongPress(p, (x, y) => { if(!p.querySelector('textarea')) wbStampMenu(x, y, { on: 'note', task_id: t.id, note_id: n.id }, n, wbRenderPage); });
     notes.appendChild(p);
@@ -3254,7 +3285,7 @@ function wbRenderCard(){
       '<textarea rows="1" data-r="' + w + '" placeholder="平时归 ' + WB_NAME[w] + ' 管的事">' + wbEsc((wb.roles || {})[w]) + '</textarea>' +
       '<ul>' + duty(w) + '</ul>').join('') +
     '<h3 style="margin-top:20px">Archive <span class="wb-ts" style="font-family:Noto Serif SC;letter-spacing:.15em">做完的事</span></h3>' +
-    (done.length ? '<ul>' + done.map(t => '<li class="arch-row"><button class="t" data-open="' + t.id + '">' + wbEsc(t.title) + '</button><button data-back="' + t.id + '">放回去</button></li>').join('') + '</ul>' : '<ul><li class="d">（还没有）</li></ul>') +
+    (done.length ? '<ul>' + done.map(t => '<li class="arch-row"><button class="t" data-open="' + t.id + '">' + wbEsc(t.title) + wbStars(t, 'mini') + '</button><button data-back="' + t.id + '">放回去</button></li>').join('') + '</ul>' : '<ul><li class="d">（还没有）</li></ul>') +
     '<h3 style="margin-top:20px">Torn out <span class="wb-ts" style="font-family:Noto Serif SC;letter-spacing:.15em">撕掉的</span></h3><ul id="wbTorn"><li class="d">……</li></ul>';
   // 撕掉的页在后端回收站里，打开这张纸条时去取
   wbApi('/wb/torn').then(list => {
