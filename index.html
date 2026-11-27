@@ -525,6 +525,29 @@
   .wb-task > .wb-circle-note{ position:absolute; right:2px; top:-3px; width:38%; text-align:center; transform: rotate(-5deg); transform-origin: center; opacity:.92; pointer-events:none; }
   .wbp-prop .wb-circle-note{ font-size:14px; } /* 那一页里小一号，免得把「擦掉」挤到下一行 */
   .wb-circle-note .by{ font-family: var(--name-font); font-style:italic; font-size:10px; opacity:.7; margin-left:4px; }
+  /* 印章：刻好字的章，各人的墨水色。双线框、印泥不匀（SVG 噪点滤镜 #wbInkF）、每枚歪一点；四个字排成 2×2，一个字是圆章 */
+  .wb-seals{ display:flex; justify-content:flex-end; gap:8px; margin:-12px 2px 4px 0; pointer-events:none; position:relative; z-index:1; }
+  .wb-seals.inline{ display:inline-flex; margin:0 10px 0 0; vertical-align:middle; }
+  .wb-seal{ --seal: var(--red); display:inline-flex; align-items:center; justify-content:center; writing-mode:vertical-rl;
+    font-family:"Noto Serif SC", serif; font-weight:600; font-size:11px; line-height:1.02; letter-spacing:0; color: var(--seal);
+    border:2.6px double var(--seal); border-radius:4px; padding:4px 3px; max-height:4.6em;
+    transform: rotate(var(--r, -6deg)); opacity:.86; mix-blend-mode: multiply; filter:url(#wbInkF); white-space:normal; }
+  .wb-seal.four{ max-height:3.1em; padding:3px; } /* 四个字排成 2×2：右边一列先读（严肃｜收到），像真的印章 */
+  .wb-seal.one{ writing-mode:horizontal-tb; border-radius:50%; width:2.3em; height:2.3em; padding:0; font-size:13px; }
+  .wb-seal.claude{ --seal: var(--c-claude); } .wb-seal.muse{ --seal: var(--c-muse); } .wb-seal.jes{ --seal: var(--c-jes); }
+  .wb-seal.fresh{ animation: wbSealIn .32s cubic-bezier(.2,.9,.3,1.25) both; }
+  @keyframes wbSealIn{ from{ transform: rotate(var(--r)) scale(1.9); opacity:0; } 60%{ opacity:.95; } to{ transform: rotate(var(--r)) scale(1); opacity:.86; } }
+  @media (prefers-reduced-motion: reduce){ .wb-seal.fresh{ animation:none; } }
+  .wbp-seals{ margin:-4px 34px 8px 0; justify-content:flex-start; }
+  /* 长按一段、一封信：弹出 Jes 的章 */
+  .wbp-note, .wb-letter{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  .wb-stampmenu{ --c-claude:#8A4B2A; --c-muse:#2F5560; --c-jes:#5B3F68; --red:#9A3A2C; --paper:#E9DDBF; --ink-soft:#5E4E3A; /* 挂在工作台外面，自己带上纸和墨水的颜色 */
+    position:fixed; z-index:80; display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px;
+    background: var(--paper); box-shadow: 0 6px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(70,52,30,.18); }
+  .wb-stampmenu button{ background:none; border:none; padding:2px; cursor:pointer; font-family:inherit; }
+  .wb-stampmenu .wb-seal{ filter:none; mix-blend-mode:normal; opacity:.9; }
+  .wb-stampmenu button.on .wb-seal{ opacity:1; box-shadow: 0 0 0 2px rgba(91,63,104,.25); }
+  .wb-stampmenu .copy{ font-size:11px; color: var(--ink-soft); border-left:1px solid rgba(70,52,30,.2); padding-left:12px; }
   .wb-task.leaving .title{ text-decoration: line-through; color: var(--ink-faint); }
   .wb-task.leaving{ transition: opacity .5s .35s; opacity:0; }
   /* 打勾的小方框：点的范围比框大一圈 */
@@ -885,6 +908,7 @@
         </div>
       </div>
     </div>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wbInkF"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="7"/><feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 1.35"/><feComposite in="SourceGraphic" operator="in"/></filter></svg>
     <div class="wb-page gone" id="wbPage">
       <div class="wb-face" style="position:relative;height:100%"><div class="wb-margin"></div>
         <button class="wb-x" id="wbPageClose" aria-label="合上"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -2702,6 +2726,55 @@ let wbPageId = null;     // 正在看哪一页（'new' = 正在写一件新的�
 let wbNewParent = '';    // 新写的这件事挂在哪个长线下面
 let wbJustInked = '';    // 刚"描成墨水"的那件事：画出来时播一下字从灰晕成墨的动画
 function wbInkClass(t){ return t.pencil ? ' pencil' : (t.id && t.id === wbJustInked ? ' inked' : ''); }
+// 印章：每人几枚刻好的章（和后端 STAMPS 一样）；Jes 长按一段 / 一封信盖章
+const WB_STAMPS = { jes: ['严肃收到', '好嘟'] };
+let wbJustStamped = ''; // 刚盖下去的那枚（by + 东西的 id）：画出来时"啪"地落下
+function wbHash(str){ let h = 0; for(const c of str) h = (h * 31 + c.codePointAt(0)) | 0; return Math.abs(h); }
+function wbSeals(x, cls){
+  if(!x || !x.stamps || !x.stamps.length) return '';
+  return '<div class="wb-seals' + (cls ? ' ' + cls : '') + '">' + x.stamps.map(s => {
+    const n = Array.from(s.word).length, r = (wbHash(s.by + s.word + (x.id || '')) % 23) - 11; // 每枚歪的角度固定（-11°～11°），不会一刷新就变
+    return '<span class="wb-seal ' + s.by + (n === 1 ? ' one' : n === 4 ? ' four' : '') + (wbJustStamped === s.by + x.id ? ' fresh' : '') + '" style="--r:' + r + 'deg">' + wbEsc(s.word) + '</span>';
+  }).join('') + '</div>';
+}
+// 长按（电脑上右键）：0.5 秒，手指挪动就不算；长按之后紧跟的那一下点击不触发
+function wbLongPress(el, fn){
+  let timer = null, x0 = 0, y0 = 0;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener('touchstart', e => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; cancel(); timer = setTimeout(() => { timer = null; el._lp = Date.now(); fn(x0, y0); }, 500); }, { passive: true });
+  el.addEventListener('touchmove', e => { const t = e.touches[0]; if(Math.abs(t.clientX - x0) > 10 || Math.abs(t.clientY - y0) > 10) cancel(); }, { passive: true });
+  el.addEventListener('touchend', cancel); el.addEventListener('touchcancel', cancel);
+  el.addEventListener('contextmenu', e => { e.preventDefault(); el._lp = Date.now(); fn(e.clientX, e.clientY); });
+}
+const wbJustLong = el => el._lp && Date.now() - el._lp < 700;
+// 弹出 Jes 的章：target = { on, task_id, note_id, letter_id }，item = 那一段 / 那封信
+function wbStampMenu(x, y, target, item, onDone){
+  document.querySelectorAll('.wb-stampmenu').forEach(m => m.remove());
+  const mine = (item.stamps || []).find(s => s.by === 'jes');
+  const m = document.createElement('div'); m.className = 'wb-stampmenu';
+  m.innerHTML = (item.by === 'jes' ? '' : WB_STAMPS.jes.map(w => { const n = Array.from(w).length;
+      return '<button data-w="' + w + '" class="' + (mine && mine.word === w ? 'on' : '') + '"><span class="wb-seal jes' + (n === 4 ? ' four' : n === 1 ? ' one' : '') + '" style="--r:0deg">' + w + '</span></button>'; }).join('')) +
+    '<button class="copy" data-c="1">复制</button>';
+  document.body.appendChild(m);
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(innerWidth - w - 8, x - w / 2)) + 'px';
+  m.style.top = Math.max(8, y - h - 14) + 'px';
+  const close = () => { m.remove(); document.removeEventListener('touchstart', outside, true); document.removeEventListener('mousedown', outside, true); };
+  const outside = e => { if(!m.contains(e.target)) close(); };
+  setTimeout(() => { document.addEventListener('touchstart', outside, true); document.addEventListener('mousedown', outside, true); }, 0);
+  m.addEventListener('click', async e => {
+    const b = e.target.closest('button'); if(!b) return;
+    close();
+    if(b.dataset.c){ try{ await navigator.clipboard.writeText(item.text || ''); wbFlash('复制好了'); }catch(_){ wbFlash('没复制上'); } return; }
+    const word = mine && mine.word === b.dataset.w ? '' : b.dataset.w; // 点自己已经盖着的那枚 = 揭掉
+    try{
+      const res = await wbApi('/wb/stamp', Object.assign({ word }, target));
+      item.stamps = res.stamps; if(!res.stamps) delete item.stamps;
+      wbJustStamped = word ? 'jes' + item.id : ''; setTimeout(() => { wbJustStamped = ''; }, 1200);
+      wbSaveLocal(); onDone();
+    }catch(err){ wbFlash(err.message); }
+  });
+}
 function wbCircled(t){ return !!(t && t.circle && t.circle.day === wbJpToday()); } // 红笔圈只管当天：过了日本零点就当没圈
 let wbPoll = null;
 const wbSaveLocal = () => { try{ localStorage.setItem('mp_wb', JSON.stringify(wb)); }catch(_){} };
@@ -2887,7 +2960,9 @@ function wbRender(){
   // 背面：信
   back.innerHTML = '<div class="wb-head"><h1>Letters</h1><span class="sub">往来</span></div>' +
     (wb.letters.length ? '' : '<div class="wb-empty">还没有人写信。</div>') +
-    wb.letters.map(l => '<div class="wb-letter">' + wbBrief(l) + wbParas(l.text) + '<div class="sig"><span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
+    wb.letters.map(l => '<div class="wb-letter" data-id="' + l.id + '">' + wbBrief(l) + wbParas(l.text) + '<div class="sig">' + wbSeals(l, 'inline') + '<span class="wb-who ' + l.by + '">— ' + (WB_NAME[l.by] || l.by) + '</span><span class="wb-ts">' + wbStamp(l.ts) + '</span></div></div>').join('');
+  back.querySelectorAll('.wb-letter').forEach(el => { const l = wb.letters.find(x => x.id === el.dataset.id);
+    if(l) wbLongPress(el, (x, y) => wbStampMenu(x, y, { on: 'letter', letter_id: l.id }, l, wbRender)); });
   if(wbEl('wbCard') && !wbEl('wbCard').classList.contains('gone')) wbRenderCard();
 }
 function wbStamp(ts){ const d = new Date(ts); return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
@@ -2931,6 +3006,7 @@ function wbRenderPage(){
     '<textarea class="wbp-in" rows="1" data-f="' + field + '" placeholder="' + ph + '">' + wbEsc(t[field]) + '</textarea></span></div>';
   box.innerHTML =
     '<textarea class="wbp-title' + wbInkClass(t) + '" id="wbTitleIn" rows="1" placeholder="这件事叫什么">' + wbEsc(t.title) + '</textarea>' +
+    (isNew ? '' : wbSeals(t, 'wbp-seals')) +
     '<div class="wbp-props">' +
       '<div class="wbp-prop"><span class="k">状态</span><span class="v">' + opt('status', 'todo', '要做') + opt('status', 'hold', '搁置') + opt('status', 'done', '做完了') + '</span></div>' +
       '<div class="wbp-prop"><span class="k">笔</span><span class="v">' +
@@ -3009,8 +3085,9 @@ function wbRenderPage(){
   const notes = wbEl('wbNotes');
   t.body.forEach(n => {
     const p = document.createElement('div'); p.className = 'wbp-note';
-    p.innerHTML = wbBrief(n) + '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>';
-    p.addEventListener('click', () => wbEditNote(t, n, p));
+    p.innerHTML = wbBrief(n) + '<span class="wb-who ' + n.by + '">' + (WB_NAME[n.by] || n.by) + '：</span>' + wbParas(n.text) + '<span class="wb-ts">' + wbStamp(n.ts) + (n.editedAt && n.by !== 'jes' ? ' 改过' : '') + '</span>' + wbSeals(n);
+    p.addEventListener('click', () => { if(!wbJustLong(p)) wbEditNote(t, n, p); });
+    wbLongPress(p, (x, y) => { if(!p.querySelector('textarea')) wbStampMenu(x, y, { on: 'note', task_id: t.id, note_id: n.id }, n, wbRenderPage); });
     notes.appendChild(p);
   });
   wbWriteSetup(t);
