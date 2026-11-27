@@ -504,6 +504,15 @@
   .wb-task .meta{ font-size:10px; color: var(--ink-soft); margin-top:1px; letter-spacing:.04em; }
   .wb-task .meta b, .wb-hi{ font-weight:400; color: var(--red); }
   .wb-task.hold{ opacity:.55; }
+  /* 铅笔字：还没想好要不要做的事。石墨灰、不加粗、字边有一点铅笔蹭开的毛；方框是虚线。定下来"描成墨水"时，字从灰慢慢晕成墨色（.inked） */
+  .wb{ --graphite: rgba(78,78,74,.66); }
+  .wb-task.pencil .title{ font-weight:400; color: var(--graphite); letter-spacing:.02em; text-shadow: 0 0 .5px rgba(70,70,66,.55), .3px .2px 0 rgba(90,90,86,.18); }
+  .wb-task.pencil .meta, .wb-task.pencil .date, .wb-task.pencil .grp{ color: var(--graphite); }
+  .wb-task.pencil .wb-box i{ border-style:dashed; border-color: var(--graphite); }
+  .wbp-title.pencil{ font-weight:400; color: var(--graphite); text-shadow: 0 0 .5px rgba(70,70,66,.55); }
+  @keyframes wbInk{ from{ color: var(--graphite); font-weight:400; } 40%{ font-weight:600; } to{ color: var(--ink); } }
+  .wb-task.inked .title, .wbp-title.inked{ animation: wbInk 1.2s ease-out; }
+  @media (prefers-reduced-motion: reduce){ .wb-task.inked .title, .wbp-title.inked{ animation:none; } }
   .wb-task.leaving .title{ text-decoration: line-through; color: var(--ink-faint); }
   .wb-task.leaving{ transition: opacity .5s .35s; opacity:0; }
   /* 打勾的小方框：点的范围比框大一圈 */
@@ -567,6 +576,10 @@
   .wbp-opt{ color: var(--ink-faint) !important; font-size:11.5px; }
   .wbp-opt.on{ color: var(--ink) !important; text-decoration: underline; text-decoration-thickness:1px; text-underline-offset:3px; }
   .wbp-opt.on.hi{ color: var(--red) !important; }
+  .wbp-ink{ color: var(--ink-faint) !important; font-size:11.5px; }
+  .wbp-ink[data-pencil="1"]{ color: var(--graphite) !important; }
+  .wbp-ink.on{ color: var(--ink) !important; text-decoration: underline; text-decoration-thickness:1px; text-underline-offset:3px; }
+  .wbp-ink.on[data-pencil="1"]{ color: var(--graphite) !important; text-decoration-style: dashed; }
   .wbp-in{ flex:1; min-width:60px; border:none; border-bottom:1px dotted transparent; border-radius:0; outline:none; background:transparent; padding:0;
     font-family:"Noto Serif SC", serif; font-size:11.5px; line-height:1.6; color: var(--ink); resize:none; overflow:hidden; display:block; }
   .wbp-in, .wbp-title{ min-height:0; max-height:none; } /* 不吃聊天输入框那条 textarea 的最小/最大高度 */
@@ -2675,6 +2688,8 @@ let wb = (() => { try{ return JSON.parse(localStorage.getItem('mp_wb')) || null;
 let wbLocked = !wbKey;   // 没钥匙、或者钥匙不对：纸上锁着
 let wbPageId = null;     // 正在看哪一页（'new' = 正在写一件新的事）
 let wbNewParent = '';    // 新写的这件事挂在哪个长线下面
+let wbJustInked = '';    // 刚"描成墨水"的那件事：画出来时播一下字从灰晕成墨的动画
+function wbInkClass(t){ return t.pencil ? ' pencil' : (t.id && t.id === wbJustInked ? ' inked' : ''); }
 let wbPoll = null;
 const wbSaveLocal = () => { try{ localStorage.setItem('mp_wb', JSON.stringify(wb)); }catch(_){} };
 const wbEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2784,7 +2799,7 @@ wbEl('wbDaysBtn').addEventListener('click', () => {
 /* ---- 正面：手头的事 ---- */
 function wbTaskRow(t, opts = {}){
   const div = document.createElement('div');
-  div.className = 'wb-task' + (t.status === 'hold' ? ' hold' : '');
+  div.className = 'wb-task' + (t.status === 'hold' ? ' hold' : '') + wbInkClass(t);
   const p = t.parent && wb.tasks.find(x => x.id === t.parent);
   div.innerHTML = (opts.noDate ? '' : '<span class="date">' + wbDay(t.start) + '</span>') +
     '<div class="row">' + (t.status === 'hold' ? '' : '<button class="wb-box' + (t.status === 'done' ? ' on' : '') + '" aria-label="做完了"><i></i></button>') +
@@ -2901,9 +2916,12 @@ function wbRenderPage(){
   const text = (field, label, ph, who) => '<div class="wbp-prop"><span class="k">' + label + '</span><span class="v">' + (who ? '<span class="wb-who ' + who + '">' + WB_NAME[who] + '</span>' : '') +
     '<textarea class="wbp-in" rows="1" data-f="' + field + '" placeholder="' + ph + '">' + wbEsc(t[field]) + '</textarea></span></div>';
   box.innerHTML =
-    '<textarea class="wbp-title" id="wbTitleIn" rows="1" placeholder="这件事叫什么">' + wbEsc(t.title) + '</textarea>' +
+    '<textarea class="wbp-title' + wbInkClass(t) + '" id="wbTitleIn" rows="1" placeholder="这件事叫什么">' + wbEsc(t.title) + '</textarea>' +
     '<div class="wbp-props">' +
       '<div class="wbp-prop"><span class="k">状态</span><span class="v">' + opt('status', 'todo', '要做') + opt('status', 'hold', '搁置') + opt('status', 'done', '做完了') + '</span></div>' +
+      '<div class="wbp-prop"><span class="k">笔</span><span class="v">' +
+        '<button class="wbp-ink' + (t.pencil ? ' on' : '') + '" data-pencil="1">铅笔 · 还没想好</button>' +
+        '<button class="wbp-ink' + (t.pencil ? '' : ' on') + '" data-pencil="">墨水 · 定了</button></span></div>' +
       when('start', '开始') + when('end', '结束') +
       text('category', '类别', '学习、搬家、社团……') +
       '<div class="wbp-prop"><span class="k">优先级</span><span class="v">' + opt('priority', 'high', '高', true) + opt('priority', 'mid', '中') + opt('priority', 'low', '低') + opt('priority', '', '不分') + '</span></div>' +
@@ -2935,6 +2953,13 @@ function wbRenderPage(){
   const need = () => { if(wbPageId === 'new'){ wbFlash('先写这件事叫什么'); titleIn.focus(); return false; } return true; };
   const save = async (patch) => { if(!need()) return; try{ await wbSaveTask(wbPageId, patch); wbRenderPage(); }catch(e){ wbFlash(e.message); wbRenderPage(); } };
   box.querySelectorAll('.wbp-opt').forEach(b => b.addEventListener('click', () => save({ [b.dataset.f]: b.dataset.v })));
+  // 铅笔 / 墨水：从铅笔改成墨水时，这件事的字从灰慢慢晕成墨色
+  box.querySelectorAll('.wbp-ink').forEach(b => b.addEventListener('click', () => {
+    const pencil = !!b.dataset.pencil;
+    if(pencil === !!t.pencil) return;
+    if(!pencil && t.id){ wbJustInked = t.id; setTimeout(() => { if(wbJustInked === t.id) wbJustInked = ''; }, 1500); }
+    save({ pencil });
+  }));
   box.querySelectorAll('.wbp-in').forEach(inp => {
     inp.addEventListener('change', () => { if(need()) wbSaveTask(wbPageId, { [inp.dataset.f]: inp.value }).catch(e => { wbFlash(e.message); wbRenderPage(); }); });
     inp.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); inp.blur(); } });
