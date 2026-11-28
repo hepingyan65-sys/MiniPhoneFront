@@ -727,6 +727,14 @@
     transition: transform .28s cubic-bezier(.2,.8,.3,1), opacity .2s; }
   .wb-front, .wb-back{ container-type:size; } /* 让上面的标题量得到整张纸有多大 */
   .wb-inner.tucked > .wb-head{ transform: translateY(-110%); opacity:0; }
+  /* 背面：离最底下远了，写字那一行的右上方浮出一个只有箭头的方形小按钮：平时回到最新的信，被拽回顶上时回到刚才那儿 */
+  .wb-jump-slot{ flex:none; height:0; position:relative; z-index:4; }
+  .wb-jump{ position:absolute; right:20px; bottom:10px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:7px;
+    background: rgba(233,221,191,.94) !important; box-shadow: 0 1px 4px rgba(60,40,20,.18), inset 0 0 0 1px rgba(94,78,58,.25);
+    color: var(--c-jes) !important;
+    opacity:0; transform: translateY(6px); pointer-events:none; transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.3,1); }
+  .wb-jump svg{ width:17px; height:17px; }
+  .wb-jump.show{ opacity:1; transform:none; pointer-events:auto; }
 
   /* ==================== 电脑脸：宽屏（900px 以上：电脑、横着的 iPad） ====================
      不再画手机框，铺满整个窗口。「信息」左右两栏（左边联系人，右边聊天，像微信电脑版）；
@@ -926,6 +934,7 @@
         </div>
         <div class="wb-face wb-back"><div class="wb-margin"></div>
           <div class="wb-inner" id="wbBack"></div>
+          <div class="wb-jump-slot"><button class="wb-jump" id="wbBackJump" aria-label="回到最新的信"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v13M6.5 12.5L12 18l5.5-5.5"/></svg></button></div>
           <div class="wb-pen"><textarea id="wbLetterIn" rows="1" placeholder="写点什么……"></textarea><button id="wbLetterSend">落款</button></div>
           <button class="wb-flip" id="wbFlipBack">‹ 翻回去</button>
         </div>
@@ -3112,6 +3121,7 @@ function wbRender(){
   back.querySelectorAll('.wb-letter').forEach(el => { const l = wb.letters.find(x => x.id === el.dataset.id);
     if(l) wbLongPress(el, (x, y) => wbStampMenu(x, y, { on: 'letter', letter_id: l.id }, l, wbRender)); });
   if(wbEl('wbCard') && !wbEl('wbCard').classList.contains('gone')) wbRenderCard();
+  if(typeof wbBackPill === 'function') requestAnimationFrame(wbBackPill);
 }
 function wbStamp(ts){ const d = new Date(ts); return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 
@@ -3385,7 +3395,7 @@ wbEl('wbLetterSend').addEventListener('click', async () => {
 function wbFlipTo(back){
   if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
   wbEl('wbSheet').classList.toggle('flipped', back);
-  if(back) setTimeout(() => { const b = wbEl('wbBack'); b.scrollTop = b.scrollHeight; }, 50); // 翻过来先看到最新的信
+  if(back) setTimeout(() => { const b = wbEl('wbBack'); b.scrollTop = b.scrollHeight; wbBackReturn = 0; wbBackPill(); }, 50); // 翻过来先看到最新的信
 }
 wbEl('wbFlip').addEventListener('click', () => wbFlipTo(true));
 wbEl('wbFlipBack').addEventListener('click', () => wbFlipTo(false));
@@ -3434,6 +3444,38 @@ wbEl('wbCard').addEventListener('click', e => { if(e.target === wbEl('wbCard')) 
     else if(d > 6) el.classList.add('tucked');       // 往下划：藏起来
     else if(d < -6) el.classList.remove('tucked');   // 往上划：出来
   }, { passive: true });
+});
+
+/* ---- 背面：一键回到最底下（最新的信）/ 回到刚才看的地方 ----
+   iPhone 上碰一下最顶上的状态栏，系统会把正在滚的那块拉回最上面（网页关不掉），
+   所以记下她停下来时在哪儿：从下面一下子到了顶上，就给她一个回去的按钮 */
+let wbBackRest = 0, wbBackReturn = 0, wbBackRestTimer = null;
+function wbBackPill(){
+  const b = wbEl('wbBack'), btn = wbEl('wbBackJump');
+  const far = b.scrollHeight - b.scrollTop - b.clientHeight > b.clientHeight * 0.8;
+  if(wbBackReturn && b.scrollTop > 60) wbBackReturn = 0; // 她自己往下划了：不用再提"回到刚才那儿"
+  btn.setAttribute('aria-label', wbBackReturn ? '回到刚才看的地方' : '回到最新的信');
+  btn.classList.toggle('show', far || !!wbBackReturn);
+}
+function wbBackGo(top){
+  const b = wbEl('wbBack');
+  // 离得很远：先瞬间跳到目标上面一屏，再平滑滚完最后一屏（不然一路刷过去又慢又晕）
+  if(Math.abs(top - b.scrollTop) > b.clientHeight * 1.5) b.scrollTop = top > b.scrollTop ? top - b.clientHeight : top + b.clientHeight;
+  b.scrollTo({ top, behavior: 'smooth' });
+}
+wbEl('wbBack').addEventListener('scroll', () => {
+  wbBackPill();
+  clearTimeout(wbBackRestTimer);
+  wbBackRestTimer = setTimeout(() => { // 停下来了
+    const b = wbEl('wbBack'), y = b.scrollTop;
+    if(y < 24 && wbBackRest > 400) wbBackReturn = wbBackRest; // 从下面一下子到了最上面
+    wbBackRest = y; wbBackPill();
+  }, 250);
+}, { passive: true });
+wbEl('wbBackJump').addEventListener('click', () => {
+  const b = wbEl('wbBack');
+  const top = wbBackReturn || (b.scrollHeight - b.clientHeight);
+  wbBackReturn = 0; wbBackGo(top);
 });
 
 /* ---- 进出工作台 ---- */
